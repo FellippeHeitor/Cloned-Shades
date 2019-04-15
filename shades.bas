@@ -116,7 +116,7 @@
 '       - Added: Quick end screen animation.
 '       - Countdown to game start with "GET READY" on the screen.
 '
-
+$EXEICON:'./shades.ico'
 'Game constants -------------------------------------------------------
 'General Use:
 CONST False = 0
@@ -568,911 +568,911 @@ DATA 735,670,605,540,475,410,345,280,215,150,85,20
 'SUBs and FUNCTIONs ----------------------------------------------------
 
 SUB GenerateNewBlock
-DIM LineSize AS LONG
-DIM LineStart AS LONG
-DIM LineEnd AS LONG
-DIM TargetLineStart AS LONG
-DIM TargetLineEnd AS LONG
-DIM LeftSideIncrement AS LONG
-DIM RightSideIncrement AS LONG
+    DIM LineSize AS LONG
+    DIM LineStart AS LONG
+    DIM LineEnd AS LONG
+    DIM TargetLineStart AS LONG
+    DIM TargetLineEnd AS LONG
+    DIM LeftSideIncrement AS LONG
+    DIM RightSideIncrement AS LONG
 
-'Randomly chooses where the next block will start falling down
-CurrentColumn = _CEIL(RND * 4)
-CurrentShade = NextShade
+    'Randomly chooses where the next block will start falling down
+    CurrentColumn = _CEIL(RND * 4)
+    CurrentShade = NextShade
 
-'Randomly chooses the next shade. It is done at this point so
-'that the "next" bar will be displayed correctly across the game screen.
-NextShade = _CEIL(RND * 3)
+    'Randomly chooses the next shade. It is done at this point so
+    'that the "next" bar will be displayed correctly across the game screen.
+    NextShade = _CEIL(RND * 3)
 
-'Block's Y coordinate starts offscreen
-Y = -48: PrevY = Y
+    'Block's Y coordinate starts offscreen
+    Y = -48: PrevY = Y
 
-IF DemoMode THEN EXIT SUB
+    IF DemoMode THEN EXIT SUB
 
-'Animate the birth of a new block:
-IF Whistle AND Settings.SoundOn THEN
-    _SNDPLAYCOPY Whistle
-END IF
+    'Animate the birth of a new block:
+    IF Whistle AND Settings.SoundOn THEN
+        _SNDPLAYCOPY Whistle
+    END IF
 
-LineSize = 600
-LineStart = 0
-LineEnd = 599
-TargetLineStart = (CurrentColumn * BlockWidth) - BlockWidth
-TargetLineEnd = CurrentColumn * BlockWidth
-LeftSideIncrement = (TargetLineStart - LineStart) / TopAnimationSteps
-RightSideIncrement = (LineEnd - TargetLineEnd) / TopAnimationSteps
+    LineSize = 600
+    LineStart = 0
+    LineEnd = 599
+    TargetLineStart = (CurrentColumn * BlockWidth) - BlockWidth
+    TargetLineEnd = CurrentColumn * BlockWidth
+    LeftSideIncrement = (TargetLineStart - LineStart) / TopAnimationSteps
+    RightSideIncrement = (LineEnd - TargetLineEnd) / TopAnimationSteps
 
-FOR i = 1 TO TopAnimationSteps
-    _LIMIT 120
+    FOR i = 1 TO TopAnimationSteps
+        _LIMIT 120
+        IF BgImage < -1 THEN _PUTIMAGE (0, 0)-(599, 15), BgImage, GameScreen, (0, 0)-(599, 15) ELSE LINE (0, 0)-(599, 15), BackgroundColor, BF
+        LINE (LineStart, 0)-(LineEnd, 15), Shade&(CurrentShade), BF
+        LineStart = LineStart + LeftSideIncrement
+        LineEnd = LineEnd - RightSideIncrement
+        IF INKEY$ <> "" THEN EXIT FOR
+        UpdateScreen
+    NEXT i
     IF BgImage < -1 THEN _PUTIMAGE (0, 0)-(599, 15), BgImage, GameScreen, (0, 0)-(599, 15) ELSE LINE (0, 0)-(599, 15), BackgroundColor, BF
-    LINE (LineStart, 0)-(LineEnd, 15), Shade&(CurrentShade), BF
-    LineStart = LineStart + LeftSideIncrement
-    LineEnd = LineEnd - RightSideIncrement
-    IF INKEY$ <> "" THEN EXIT FOR
-    UpdateScreen
-NEXT i
-IF BgImage < -1 THEN _PUTIMAGE (0, 0)-(599, 15), BgImage, GameScreen, (0, 0)-(599, 15) ELSE LINE (0, 0)-(599, 15), BackgroundColor, BF
 END SUB
 
 SUB MoveBlock
-DIM MX AS LONG, MY AS LONG, MB AS LONG 'Mouse X, Y and Button
+    DIM MX AS LONG, MY AS LONG, MB AS LONG 'Mouse X, Y and Button
 
-DIM k$
+    DIM k$
 
-FadeStep = 0
-Increment = InitialIncrement
-IF NOT DemoMode THEN BlockPut = False
+    FadeStep = 0
+    Increment = InitialIncrement
+    IF NOT DemoMode THEN BlockPut = False
 
-DO: _LIMIT 60
-    'Before moving the block using Increment, check if the movement will
-    'cause the block to move to another row. If so, check if such move will
-    'cause to block to be put down.
-    IF ConvertYtoRow(Y + Increment) <> ConvertYtoRow(Y) AND NOT AlignedWithRow THEN
-        Y = BlockRows(ConvertYtoRow(Y))
-        AlignedWithRow = True
-    ELSE
-        Y = Y + Increment
-        AlignedWithRow = False
-    END IF
-
-    CurrentRow = ConvertYtoRow(Y)
-
-    IF AlignedWithRow THEN
-        IF CurrentRow > 1 THEN
-            IF Board(CurrentRow - 1, CurrentColumn).State THEN BlockPut = True
-        ELSEIF CurrentRow = 1 THEN
-            BlockPut = True
+    DO: _LIMIT 60
+        'Before moving the block using Increment, check if the movement will
+        'cause the block to move to another row. If so, check if such move will
+        'cause to block to be put down.
+        IF ConvertYtoRow(Y + Increment) <> ConvertYtoRow(Y) AND NOT AlignedWithRow THEN
+            Y = BlockRows(ConvertYtoRow(Y))
+            AlignedWithRow = True
+        ELSE
+            Y = Y + Increment
+            AlignedWithRow = False
         END IF
-    END IF
 
-    IF BlockPut THEN
-        IF GameMode = FILLMODE THEN Score = Score + 5 ELSE Score = Score + 2
+        CurrentRow = ConvertYtoRow(Y)
+
+        IF AlignedWithRow THEN
+            IF CurrentRow > 1 THEN
+                IF Board(CurrentRow - 1, CurrentColumn).State THEN BlockPut = True
+            ELSEIF CurrentRow = 1 THEN
+                BlockPut = True
+            END IF
+        END IF
+
+        IF BlockPut THEN
+            IF GameMode = FILLMODE THEN Score = Score + 5 ELSE Score = Score + 2
+            DropSoundI = _CEIL(RND * 3)
+            IF DropSound(DropSoundI) AND Settings.SoundOn AND NOT DemoMode THEN
+                _SNDPLAYCOPY DropSound(DropSoundI)
+            END IF
+            Board(CurrentRow, CurrentColumn).State = True
+            Board(CurrentRow, CurrentColumn).Shade = CurrentShade
+        END IF
+
+        IF Board(12, CurrentColumn).State = True AND Board(12, CurrentColumn).Shade <> Board(11, CurrentColumn).Shade THEN
+            GameOver = True
+            EXIT DO
+        END IF
+
+        'Erase previous block put on screen
+        IF BgImage < -1 THEN
+            _PUTIMAGE (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY + Increment), BgImage, GameScreen, (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY + Increment)
+        ELSE
+            LINE (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY + Increment), BackgroundColor, BF
+        END IF
+        PrevY = Y
+
+        'Show the next shade on the top bar unless in DemoMode
+        IF FadeStep < 255 AND NOT DemoMode THEN
+            FadeStep = FadeStep + 1
+            LINE (0, 0)-(599, 15), _RGBA32(Shades(NextShade).R, Shades(NextShade).G, Shades(NextShade).B, FadeStep), BF
+        END IF
+
+        'Draw the current block
+        LINE (BlockPos(CurrentColumn), Y)-STEP(BlockWidth, BlockHeight), Shade&(CurrentShade), BF
+
+        UpdateScreen
+
+        IF NOT DemoMode AND Increment < BlockHeight THEN k$ = INKEY$
+
+        'Emulate arrow keys if mouse was clicked+held+moved on screen
+        'Code courtesy of Steve McNeill:
+        WHILE _MOUSEINPUT: WEND
+        STATIC OldX, OldY
+        MX = _MOUSEX: MY = _MOUSEY: MB = _MOUSEBUTTON(1)
+
+
+        IF MB THEN
+            IF ABS(OldX - MX) > 100 THEN
+                IF OldX < MX THEN k$ = CHR$(0) + CHR$(77) ELSE k$ = CHR$(0) + CHR$(75)
+                OldX = MX
+            END IF
+            IF ABS(OldY - MY) > 100 THEN
+                IF OldY < MY THEN k$ = CHR$(0) + CHR$(80)
+                OldY = MY
+            END IF
+        ELSE
+            OldX = MX
+            OldY = MY
+        END IF
+
+        SELECT CASE k$
+            CASE CHR$(0) + CHR$(80) 'Down arrow
+                Increment = BlockHeight
+            CASE CHR$(0) + CHR$(75) 'Left arrow
+                IF CurrentColumn > 1 THEN
+                    IF Board(CurrentRow, CurrentColumn - 1).State = False THEN
+                        IF BgImage < -1 THEN _PUTIMAGE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BgImage, GameScreen, (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight) ELSE LINE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BackgroundColor, BF
+                        CurrentColumn = CurrentColumn - 1
+                    END IF
+                END IF
+            CASE CHR$(0) + CHR$(77) 'Right arrow
+                IF CurrentColumn < 4 THEN
+                    IF Board(CurrentRow, CurrentColumn + 1).State = False THEN
+                        IF BgImage < -1 THEN _PUTIMAGE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BgImage, GameScreen, (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight) ELSE LINE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BackgroundColor, BF
+                        CurrentColumn = CurrentColumn + 1
+                    END IF
+                END IF
+            CASE CHR$(27)
+                IF GameMode <> FILLMODE THEN
+                    IF BgMusic(GameMode) THEN _SNDSTOP BgMusic(GameMode)
+                ELSE
+                    IF BgMusic(ZENMODE) THEN _SNDSTOP BgMusic(ZENMODE)
+                END IF
+                IF BgMusic(4) THEN _SNDSTOP BgMusic(4)
+                REDIM Choices(1 TO 2) AS STRING
+                REDIM Info(1 TO 2) AS STRING
+                REDIM Tips(1 TO 2) AS LONG
+                Choices(1) = "Quit"
+                Choices(2) = "Resume"
+                IF Menu(1, 2, Choices(), Info(), Tips(), 3) = 1 THEN
+                    GameEnded = True
+                ELSE
+                    IF GameMode <> FILLMODE THEN
+                        IF Settings.MusicOn AND BgMusic(GameMode) AND NOT InDanger THEN _SNDLOOP BgMusic(GameMode)
+                        IF Settings.MusicOn AND BgMusic(4) AND InDanger THEN _SNDLOOP BgMusic(4)
+                    ELSE
+                        IF Settings.MusicOn AND BgMusic(ZENMODE) AND NOT InDanger THEN _SNDLOOP BgMusic(ZENMODE)
+                        IF Settings.MusicOn AND BgMusic(4) AND InDanger THEN _SNDLOOP BgMusic(4)
+                    END IF
+                END IF
+                RedrawBoard
+                'CASE " "
+                '    GameOver = True
+        END SELECT
+        IF DemoMode THEN EXIT SUB
+    LOOP UNTIL BlockPut OR GameEnded OR GameOver
+END SUB
+
+SUB CheckMerge
+    'Check if a block merge will be required:
+    DIM YStep AS LONG, AnimationLimit AS LONG
+    DIM WatchOutColor AS _BIT, PreviousDest AS LONG
+    DIM DangerMessage$
+
+    Merged = False
+
+    AnimationLimit = 60 'Default for NORMALINCREMENT
+    SELECT CASE InitialIncrement
+        CASE ZENINCREMENT: AnimationLimit = 30
+        CASE FLASHINCREMENT: AnimationLimit = 90
+    END SELECT
+
+    IF BlockPut AND CurrentRow > 1 THEN
+        DO
+            IF Board(CurrentRow, CurrentColumn).Shade = Board(CurrentRow - 1, CurrentColumn).Shade THEN
+                'Change block's color and the one touched to a darker shade, if it's not the darkest yet
+                IF GameMode = FILLMODE THEN Score = Score - 5 - CurrentShade * 2 ELSE Score = Score + CurrentShade * 2
+                IF Score < 0 THEN Score = 0
+                IF CurrentShade < 5 THEN
+                    Merged = True
+                    TotalMerges = TotalMerges + 1
+                    i = CurrentShade
+                    RStep = (Shades(i).R - Shades(i + 1).R) / MergeSteps
+                    GStep = (Shades(i).G - Shades(i + 1).G) / MergeSteps
+                    BStep = (Shades(i).B - Shades(i + 1).B) / MergeSteps
+                    YStep = (BlockHeight) / MergeSteps
+
+                    RToGo = Shades(i).R
+                    GToGo = Shades(i).G
+                    BToGo = Shades(i).B
+
+                    ShrinkingHeight = BlockHeight * 2
+
+                    IF SplashSound(CurrentShade) AND Settings.SoundOn AND NOT DemoMode AND NOT GameMode = FILLMODE THEN
+                        _SNDPLAYCOPY SplashSound(CurrentShade)
+                    ELSEIF Settings.SoundOn AND GameMode = FILLMODE THEN
+                        IF ShockSound THEN _SNDPLAYCOPY ShockSound
+                    END IF
+
+                    FOR Merge = 0 TO MergeSteps: _LIMIT AnimationLimit
+                        RToGo = RToGo - RStep
+                        GToGo = GToGo - GStep
+                        BToGo = BToGo - BStep
+
+                        ShrinkingHeight = ShrinkingHeight - YStep
+
+                        IF BgImage < -1 THEN
+                            _PUTIMAGE (BlockPos(CurrentColumn), BlockRows(CurrentRow))-(BlockPos(CurrentColumn) + BlockWidth, BlockRows(CurrentRow) + BlockHeight * 2 + 1), BgImage, GameScreen, (BlockPos(CurrentColumn), BlockRows(CurrentRow))-(BlockPos(CurrentColumn) + BlockWidth, BlockRows(CurrentRow) + BlockHeight * 2 + 1)
+                        ELSE
+                            LINE (BlockPos(CurrentColumn), BlockRows(CurrentRow))-STEP(BlockWidth, BlockHeight * 2 + 1), BackgroundColor, BF
+                        END IF
+
+                        'Draw the merging blocks:
+                        LINE (BlockPos(CurrentColumn), BlockRows(CurrentRow) + (BlockHeight * 2) - ShrinkingHeight - 1)-STEP(BlockWidth, ShrinkingHeight + 2), _RGB32(RToGo, GToGo, BToGo), BF
+                        IF GameMode = FILLMODE THEN
+                            InWatchOut = True
+                            PreviousDest = _DEST
+                            _DEST OverlayGraphics
+                            IF WatchOutColor THEN CLS , _RGB(255, 255, 0) ELSE CLS , _RGBA32(0, 0, 0, 100)
+                            WatchOutColor = NOT WatchOutColor
+                            DangerMessage$ = "WATCH OUT!"
+                            PrintShadow _WIDTH \ 2 - _PRINTWIDTH(DangerMessage$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT \ 2, DangerMessage$, _RGB32(255, 255, 255)
+                            _DEST PreviousDest
+                        END IF
+                        UpdateScreen
+                    NEXT Merge
+                    InWatchOut = False
+
+                    Board(CurrentRow, CurrentColumn).State = False
+                    Board(CurrentRow - 1, CurrentColumn).Shade = i + 1
+                ELSE
+                    EXIT DO
+                END IF
+            ELSE
+                EXIT DO
+            END IF
+            CurrentRow = CurrentRow - 1
+            CurrentShade = CurrentShade + 1
+            Y = BlockRows(CurrentRow)
+            PrevY = Y
+            CheckDanger
+        LOOP UNTIL CurrentRow = 1 OR CurrentShade = 5
+    END IF
+    _KEYCLEAR
+END SUB
+
+SUB CheckConnectedLines
+    'Check for connected lines with the same shade and
+    'compute the new score, besides generating the disappearing
+    'animation:
+    DIM WatchOutColor AS _BIT, PreviousDest AS LONG
+    DIM DangerMessage$
+
+    Matched = False
+    DO
+        CurrentMatch = CheckMatchingLine%
+        IF CurrentMatch = 0 THEN EXIT DO
+
+        Matched = True
+        IF GameMode = FILLMODE THEN Score = Score - 40 ELSE Score = Score + 40
+        IF Score < 0 THEN Score = 0
+
+        MatchLineStart = BlockRows(CurrentMatch) + BlockHeight \ 2
+
+        IF LineSound AND Settings.SoundOn AND NOT DemoMode AND NOT GameMode = FILLMODE THEN
+            _SNDPLAYCOPY LineSound
+        ELSEIF Settings.SoundOn AND GameMode = FILLMODE THEN
+            IF ShockSound THEN _SNDPLAYCOPY ShockSound
+        END IF
+
+        FOR i = 1 TO BlockHeight \ 2
+            _LIMIT 60
+            IF BgImage < -1 THEN
+                _PUTIMAGE (0, MatchLineStart - i)-(599, MatchLineStart + i), BgImage, GameScreen, (0, MatchLineStart - i)-(599, MatchLineStart + i)
+            ELSE
+                LINE (0, MatchLineStart - i)-(599, MatchLineStart + i), BackgroundColor, BF
+            END IF
+            IF GameMode = FILLMODE THEN
+                InWatchOut = True
+                PreviousDest = _DEST
+                _DEST OverlayGraphics
+                IF WatchOutColor THEN CLS , _RGB(255, 255, 0) ELSE CLS , _RGBA32(0, 0, 0, 100)
+                WatchOutColor = NOT WatchOutColor
+                DangerMessage$ = "ARE YOU CRAZY?!"
+                PrintShadow _WIDTH \ 2 - _PRINTWIDTH(DangerMessage$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT \ 2, DangerMessage$, _RGB32(255, 255, 255)
+                _DEST PreviousDest
+            END IF
+            UpdateScreen
+        NEXT i
+        InWatchOut = False
+
+        DestroyLine CurrentMatch
+        TotalLines = TotalLines + 1
+        RedrawBoard
+
         DropSoundI = _CEIL(RND * 3)
         IF DropSound(DropSoundI) AND Settings.SoundOn AND NOT DemoMode THEN
             _SNDPLAYCOPY DropSound(DropSoundI)
         END IF
-        Board(CurrentRow, CurrentColumn).State = True
-        Board(CurrentRow, CurrentColumn).Shade = CurrentShade
-    END IF
-
-    IF Board(12, CurrentColumn).State = True AND Board(12, CurrentColumn).Shade <> Board(11, CurrentColumn).Shade THEN
-        GameOver = True
-        EXIT DO
-    END IF
-
-    'Erase previous block put on screen
-    IF BgImage < -1 THEN
-        _PUTIMAGE (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY + Increment), BgImage, GameScreen, (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY + Increment)
-    ELSE
-        LINE (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY + Increment), BackgroundColor, BF
-    END IF
-    PrevY = Y
-
-    'Show the next shade on the top bar unless in DemoMode
-    IF FadeStep < 255 AND NOT DemoMode THEN
-        FadeStep = FadeStep + 1
-        LINE (0, 0)-(599, 15), _RGBA32(Shades(NextShade).R, Shades(NextShade).G, Shades(NextShade).B, FadeStep), BF
-    END IF
-
-    'Draw the current block
-    LINE (BlockPos(CurrentColumn), Y)-STEP(BlockWidth, BlockHeight), Shade&(CurrentShade), BF
-
-    UpdateScreen
-
-    IF NOT DemoMode AND Increment < BlockHeight THEN k$ = INKEY$
-
-    'Emulate arrow keys if mouse was clicked+held+moved on screen
-    'Code courtesy of Steve McNeill:
-    WHILE _MOUSEINPUT: WEND
-    STATIC OldX, OldY
-    MX = _MOUSEX: MY = _MOUSEY: MB = _MOUSEBUTTON(1)
-
-
-    IF MB THEN
-        IF ABS(OldX - MX) > 100 THEN
-            IF OldX < MX THEN k$ = CHR$(0) + CHR$(77) ELSE k$ = CHR$(0) + CHR$(75)
-            OldX = MX
-        END IF
-        IF ABS(OldY - MY) > 100 THEN
-            IF OldY < MY THEN k$ = CHR$(0) + CHR$(80)
-            OldY = MY
-        END IF
-    ELSE
-        OldX = MX
-        OldY = MY
-    END IF
-
-    SELECT CASE k$
-        CASE CHR$(0) + CHR$(80) 'Down arrow
-            Increment = BlockHeight
-        CASE CHR$(0) + CHR$(75) 'Left arrow
-            IF CurrentColumn > 1 THEN
-                IF Board(CurrentRow, CurrentColumn - 1).State = False THEN
-                    IF BgImage < -1 THEN _PUTIMAGE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BgImage, GameScreen, (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight) ELSE LINE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BackgroundColor, BF
-                    CurrentColumn = CurrentColumn - 1
-                END IF
-            END IF
-        CASE CHR$(0) + CHR$(77) 'Right arrow
-            IF CurrentColumn < 4 THEN
-                IF Board(CurrentRow, CurrentColumn + 1).State = False THEN
-                    IF BgImage < -1 THEN _PUTIMAGE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BgImage, GameScreen, (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight) ELSE LINE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BackgroundColor, BF
-                    CurrentColumn = CurrentColumn + 1
-                END IF
-            END IF
-        CASE CHR$(27)
-            IF GameMode <> FILLMODE THEN
-                IF BgMusic(GameMode) THEN _SNDSTOP BgMusic(GameMode)
-            ELSE
-                IF BgMusic(ZENMODE) THEN _SNDSTOP BgMusic(ZENMODE)
-            END IF
-            IF BgMusic(4) THEN _SNDSTOP BgMusic(4)
-            REDIM Choices(1 TO 2) AS STRING
-            REDIM Info(1 TO 2) AS STRING
-            REDIM Tips(1 TO 2) AS LONG
-            Choices(1) = "Quit"
-            Choices(2) = "Resume"
-            IF Menu(1, 2, Choices(), Info(), Tips(), 3) = 1 THEN
-                GameEnded = True
-            ELSE
-                IF GameMode <> FILLMODE THEN
-                    IF Settings.MusicOn AND BgMusic(GameMode) AND NOT InDanger THEN _SNDLOOP BgMusic(GameMode)
-                    IF Settings.MusicOn AND BgMusic(4) AND InDanger THEN _SNDLOOP BgMusic(4)
-                ELSE
-                    IF Settings.MusicOn AND BgMusic(ZENMODE) AND NOT InDanger THEN _SNDLOOP BgMusic(ZENMODE)
-                    IF Settings.MusicOn AND BgMusic(4) AND InDanger THEN _SNDLOOP BgMusic(4)
-                END IF
-            END IF
-            RedrawBoard
-            'CASE " "
-        '    GameOver = True
-    END SELECT
-    IF DemoMode THEN EXIT SUB
-LOOP UNTIL BlockPut OR GameEnded OR GameOver
-END SUB
-
-SUB CheckMerge
-'Check if a block merge will be required:
-DIM YStep AS LONG, AnimationLimit AS LONG
-DIM WatchOutColor AS _BIT, PreviousDest AS LONG
-DIM DangerMessage$
-
-Merged = False
-
-AnimationLimit = 60 'Default for NORMALINCREMENT
-SELECT CASE InitialIncrement
-    CASE ZENINCREMENT: AnimationLimit = 30
-    CASE FLASHINCREMENT: AnimationLimit = 90
-END SELECT
-
-IF BlockPut AND CurrentRow > 1 THEN
-    DO
-        IF Board(CurrentRow, CurrentColumn).Shade = Board(CurrentRow - 1, CurrentColumn).Shade THEN
-            'Change block's color and the one touched to a darker shade, if it's not the darkest yet
-            IF GameMode = FILLMODE THEN Score = Score - 5 - CurrentShade * 2 ELSE Score = Score + CurrentShade * 2
-            IF Score < 0 THEN Score = 0
-            IF CurrentShade < 5 THEN
-                Merged = True
-                TotalMerges = TotalMerges + 1
-                i = CurrentShade
-                RStep = (Shades(i).R - Shades(i + 1).R) / MergeSteps
-                GStep = (Shades(i).G - Shades(i + 1).G) / MergeSteps
-                BStep = (Shades(i).B - Shades(i + 1).B) / MergeSteps
-                YStep = (BlockHeight) / MergeSteps
-
-                RToGo = Shades(i).R
-                GToGo = Shades(i).G
-                BToGo = Shades(i).B
-
-                ShrinkingHeight = BlockHeight * 2
-
-                IF SplashSound(CurrentShade) AND Settings.SoundOn AND NOT DemoMode AND NOT GameMode = FILLMODE THEN
-                    _SNDPLAYCOPY SplashSound(CurrentShade)
-                ELSEIF Settings.SoundOn AND GameMode = FILLMODE THEN
-                    IF ShockSound THEN _SNDPLAYCOPY ShockSound
-                END IF
-
-                FOR Merge = 0 TO MergeSteps: _LIMIT AnimationLimit
-                    RToGo = RToGo - RStep
-                    GToGo = GToGo - GStep
-                    BToGo = BToGo - BStep
-
-                    ShrinkingHeight = ShrinkingHeight - YStep
-
-                    IF BgImage < -1 THEN
-                        _PUTIMAGE (BlockPos(CurrentColumn), BlockRows(CurrentRow))-(BlockPos(CurrentColumn) + BlockWidth, BlockRows(CurrentRow) + BlockHeight * 2 + 1), BgImage, GameScreen, (BlockPos(CurrentColumn), BlockRows(CurrentRow))-(BlockPos(CurrentColumn) + BlockWidth, BlockRows(CurrentRow) + BlockHeight * 2 + 1)
-                    ELSE
-                        LINE (BlockPos(CurrentColumn), BlockRows(CurrentRow))-STEP(BlockWidth, BlockHeight * 2 + 1), BackgroundColor, BF
-                    END IF
-
-                    'Draw the merging blocks:
-                    LINE (BlockPos(CurrentColumn), BlockRows(CurrentRow) + (BlockHeight * 2) - ShrinkingHeight - 1)-STEP(BlockWidth, ShrinkingHeight + 2), _RGB32(RToGo, GToGo, BToGo), BF
-                    IF GameMode = FILLMODE THEN
-                        InWatchOut = True
-                        PreviousDest = _DEST
-                        _DEST OverlayGraphics
-                        IF WatchOutColor THEN CLS , _RGB(255, 255, 0) ELSE CLS , _RGBA32(0, 0, 0, 100)
-                        WatchOutColor = NOT WatchOutColor
-                        DangerMessage$ = "WATCH OUT!"
-                        PrintShadow _WIDTH \ 2 - _PRINTWIDTH(DangerMessage$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT \ 2, DangerMessage$, _RGB32(255, 255, 255)
-                        _DEST PreviousDest
-                    END IF
-                    UpdateScreen
-                NEXT Merge
-                InWatchOut = False
-
-                Board(CurrentRow, CurrentColumn).State = False
-                Board(CurrentRow - 1, CurrentColumn).Shade = i + 1
-            ELSE
-                EXIT DO
-            END IF
-        ELSE
-            EXIT DO
-        END IF
-        CurrentRow = CurrentRow - 1
-        CurrentShade = CurrentShade + 1
-        Y = BlockRows(CurrentRow)
-        PrevY = Y
-        CheckDanger
-    LOOP UNTIL CurrentRow = 1 OR CurrentShade = 5
-END IF
-_KEYCLEAR
-END SUB
-
-SUB CheckConnectedLines
-'Check for connected lines with the same shade and
-'compute the new score, besides generating the disappearing
-'animation:
-DIM WatchOutColor AS _BIT, PreviousDest AS LONG
-DIM DangerMessage$
-
-Matched = False
-DO
-    CurrentMatch = CheckMatchingLine%
-    IF CurrentMatch = 0 THEN EXIT DO
-
-    Matched = True
-    IF GameMode = FILLMODE THEN Score = Score - 40 ELSE Score = Score + 40
-    IF Score < 0 THEN Score = 0
-
-    MatchLineStart = BlockRows(CurrentMatch) + BlockHeight \ 2
-
-    IF LineSound AND Settings.SoundOn AND NOT DemoMode AND NOT GameMode = FILLMODE THEN
-        _SNDPLAYCOPY LineSound
-    ELSEIF Settings.SoundOn AND GameMode = FILLMODE THEN
-        IF ShockSound THEN _SNDPLAYCOPY ShockSound
-    END IF
-
-    FOR i = 1 TO BlockHeight \ 2
-        _LIMIT 60
-        IF BgImage < -1 THEN
-            _PUTIMAGE (0, MatchLineStart - i)-(599, MatchLineStart + i), BgImage, GameScreen, (0, MatchLineStart - i)-(599, MatchLineStart + i)
-        ELSE
-            LINE (0, MatchLineStart - i)-(599, MatchLineStart + i), BackgroundColor, BF
-        END IF
-        IF GameMode = FILLMODE THEN
-            InWatchOut = True
-            PreviousDest = _DEST
-            _DEST OverlayGraphics
-            IF WatchOutColor THEN CLS , _RGB(255, 255, 0) ELSE CLS , _RGBA32(0, 0, 0, 100)
-            WatchOutColor = NOT WatchOutColor
-            DangerMessage$ = "ARE YOU CRAZY?!"
-            PrintShadow _WIDTH \ 2 - _PRINTWIDTH(DangerMessage$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT \ 2, DangerMessage$, _RGB32(255, 255, 255)
-            _DEST PreviousDest
-        END IF
-        UpdateScreen
-    NEXT i
-    InWatchOut = False
-
-    DestroyLine CurrentMatch
-    TotalLines = TotalLines + 1
-    RedrawBoard
-
-    DropSoundI = _CEIL(RND * 3)
-    IF DropSound(DropSoundI) AND Settings.SoundOn AND NOT DemoMode THEN
-        _SNDPLAYCOPY DropSound(DropSoundI)
-    END IF
-    IF DemoMode THEN DemoMode = False
-LOOP
+        IF DemoMode THEN DemoMode = False
+    LOOP
 END SUB
 
 FUNCTION ConvertYtoRow (CurrentY)
-'Returns the row on the board through which the block is currently
-'passing.
+    'Returns the row on the board through which the block is currently
+    'passing.
 
-IF CurrentY >= -48 AND CurrentY <= 20 THEN
-    ConvertYtoRow = 12
-ELSEIF CurrentY > 20 AND CurrentY <= 85 THEN
-    ConvertYtoRow = 11
-ELSEIF CurrentY > 85 AND CurrentY <= 150 THEN
-    ConvertYtoRow = 10
-ELSEIF CurrentY > 150 AND CurrentY <= 215 THEN
-    ConvertYtoRow = 9
-ELSEIF CurrentY > 215 AND CurrentY <= 280 THEN
-    ConvertYtoRow = 8
-ELSEIF CurrentY > 280 AND CurrentY <= 345 THEN
-    ConvertYtoRow = 7
-ELSEIF CurrentY > 345 AND CurrentY <= 410 THEN
-    ConvertYtoRow = 6
-ELSEIF CurrentY > 410 AND CurrentY <= 475 THEN
-    ConvertYtoRow = 5
-ELSEIF CurrentY > 475 AND CurrentY <= 540 THEN
-    ConvertYtoRow = 4
-ELSEIF CurrentY > 540 AND CurrentY <= 605 THEN
-    ConvertYtoRow = 3
-ELSEIF CurrentY > 605 AND CurrentY <= 670 THEN
-    ConvertYtoRow = 2
-ELSEIF CurrentY > 670 AND CurrentY <= 735 THEN
-    ConvertYtoRow = 1
-END IF
+    IF CurrentY >= -48 AND CurrentY <= 20 THEN
+        ConvertYtoRow = 12
+    ELSEIF CurrentY > 20 AND CurrentY <= 85 THEN
+        ConvertYtoRow = 11
+    ELSEIF CurrentY > 85 AND CurrentY <= 150 THEN
+        ConvertYtoRow = 10
+    ELSEIF CurrentY > 150 AND CurrentY <= 215 THEN
+        ConvertYtoRow = 9
+    ELSEIF CurrentY > 215 AND CurrentY <= 280 THEN
+        ConvertYtoRow = 8
+    ELSEIF CurrentY > 280 AND CurrentY <= 345 THEN
+        ConvertYtoRow = 7
+    ELSEIF CurrentY > 345 AND CurrentY <= 410 THEN
+        ConvertYtoRow = 6
+    ELSEIF CurrentY > 410 AND CurrentY <= 475 THEN
+        ConvertYtoRow = 5
+    ELSEIF CurrentY > 475 AND CurrentY <= 540 THEN
+        ConvertYtoRow = 4
+    ELSEIF CurrentY > 540 AND CurrentY <= 605 THEN
+        ConvertYtoRow = 3
+    ELSEIF CurrentY > 605 AND CurrentY <= 670 THEN
+        ConvertYtoRow = 2
+    ELSEIF CurrentY > 670 AND CurrentY <= 735 THEN
+        ConvertYtoRow = 1
+    END IF
 END FUNCTION
 
 FUNCTION ConvertXtoCol (CurrentX)
-'Returns the column on the board being currently hovered
+    'Returns the column on the board being currently hovered
 
-IF CurrentX >= BlockPos(1) AND CurrentX < BlockPos(2) THEN
-    ConvertXtoCol = 1
-ELSEIF CurrentX >= BlockPos(2) AND CurrentX < BlockPos(3) THEN
-    ConvertXtoCol = 2
-ELSEIF CurrentX >= BlockPos(3) AND CurrentX < BlockPos(4) THEN
-    ConvertXtoCol = 3
-ELSEIF CurrentX >= BlockPos(4) THEN
-    ConvertXtoCol = 4
-END IF
+    IF CurrentX >= BlockPos(1) AND CurrentX < BlockPos(2) THEN
+        ConvertXtoCol = 1
+    ELSEIF CurrentX >= BlockPos(2) AND CurrentX < BlockPos(3) THEN
+        ConvertXtoCol = 2
+    ELSEIF CurrentX >= BlockPos(3) AND CurrentX < BlockPos(4) THEN
+        ConvertXtoCol = 3
+    ELSEIF CurrentX >= BlockPos(4) THEN
+        ConvertXtoCol = 4
+    END IF
 END FUNCTION
 
 
 FUNCTION Shade& (CurrentShade)
-Shade& = _RGB32(Shades(CurrentShade).R, Shades(CurrentShade).G, Shades(CurrentShade).B)
+    Shade& = _RGB32(Shades(CurrentShade).R, Shades(CurrentShade).G, Shades(CurrentShade).B)
 END FUNCTION
 
 FUNCTION CheckMatchingLine%
 
-DIM i AS LONG
-DIM a.s AS LONG, b.s AS LONG, c.s AS LONG, d.s AS LONG
-DIM a AS LONG, b AS LONG, c AS LONG, d AS LONG
+    DIM i AS LONG
+    DIM a.s AS LONG, b.s AS LONG, c.s AS LONG, d.s AS LONG
+    DIM a AS LONG, b AS LONG, c AS LONG, d AS LONG
 
-FOR i = 1 TO 12
-    a.s = Board(i, 1).State
-    b.s = Board(i, 2).State
-    c.s = Board(i, 3).State
-    d.s = Board(i, 4).State
+    FOR i = 1 TO 12
+        a.s = Board(i, 1).State
+        b.s = Board(i, 2).State
+        c.s = Board(i, 3).State
+        d.s = Board(i, 4).State
 
-    a = Board(i, 1).Shade
-    b = Board(i, 2).Shade
-    c = Board(i, 3).Shade
-    d = Board(i, 4).Shade
+        a = Board(i, 1).Shade
+        b = Board(i, 2).Shade
+        c = Board(i, 3).Shade
+        d = Board(i, 4).Shade
 
-    IF a.s AND b.s AND c.s AND d.s THEN
-        IF a = b AND b = c AND c = d THEN
-            CheckMatchingLine% = i
-            EXIT FUNCTION
+        IF a.s AND b.s AND c.s AND d.s THEN
+            IF a = b AND b = c AND c = d THEN
+                CheckMatchingLine% = i
+                EXIT FUNCTION
+            END IF
         END IF
-    END IF
 
-NEXT i
-CheckMatchingLine% = 0
+    NEXT i
+    CheckMatchingLine% = 0
 
 END FUNCTION
 
 SUB DestroyLine (LineToDestroy AS LONG)
 
-DIM i AS LONG
-SELECT CASE LineToDestroy
-    CASE 1 TO 11
-        FOR i = LineToDestroy TO 11
-            Board(i, 1).State = Board(i + 1, 1).State
-            Board(i, 2).State = Board(i + 1, 2).State
-            Board(i, 3).State = Board(i + 1, 3).State
-            Board(i, 4).State = Board(i + 1, 4).State
+    DIM i AS LONG
+    SELECT CASE LineToDestroy
+        CASE 1 TO 11
+            FOR i = LineToDestroy TO 11
+                Board(i, 1).State = Board(i + 1, 1).State
+                Board(i, 2).State = Board(i + 1, 2).State
+                Board(i, 3).State = Board(i + 1, 3).State
+                Board(i, 4).State = Board(i + 1, 4).State
 
-            Board(i, 1).Shade = Board(i + 1, 1).Shade
-            Board(i, 2).Shade = Board(i + 1, 2).Shade
-            Board(i, 3).Shade = Board(i + 1, 3).Shade
-            Board(i, 4).Shade = Board(i + 1, 4).Shade
-        NEXT i
-        FOR i = 1 TO 4
-            Board(12, i).State = False
-            Board(12, i).Shade = 0
-        NEXT i
-    CASE 12
-        FOR i = 1 TO 4
-            Board(12, i).State = False
-            Board(12, i).Shade = 0
-        NEXT i
-END SELECT
+                Board(i, 1).Shade = Board(i + 1, 1).Shade
+                Board(i, 2).Shade = Board(i + 1, 2).Shade
+                Board(i, 3).Shade = Board(i + 1, 3).Shade
+                Board(i, 4).Shade = Board(i + 1, 4).Shade
+            NEXT i
+            FOR i = 1 TO 4
+                Board(12, i).State = False
+                Board(12, i).Shade = 0
+            NEXT i
+        CASE 12
+            FOR i = 1 TO 4
+                Board(12, i).State = False
+                Board(12, i).Shade = 0
+            NEXT i
+    END SELECT
 
 END SUB
 
 SUB RedrawBoard
-DIM i AS LONG, CurrentColumn AS LONG
-DIM StartY AS LONG, EndY AS LONG
+    DIM i AS LONG, CurrentColumn AS LONG
+    DIM StartY AS LONG, EndY AS LONG
 
-IF BgImage < -1 THEN _PUTIMAGE , BgImage, GameScreen ELSE CLS , BackgroundColor
+    IF BgImage < -1 THEN _PUTIMAGE , BgImage, GameScreen ELSE CLS , BackgroundColor
 
-FOR i = 1 TO 12
-    FOR CurrentColumn = 4 TO 1 STEP -1
-        StartY = BlockRows(i)
-        EndY = StartY + BlockHeight
+    FOR i = 1 TO 12
+        FOR CurrentColumn = 4 TO 1 STEP -1
+            StartY = BlockRows(i)
+            EndY = StartY + BlockHeight
 
-        IF Board(i, CurrentColumn).State = True THEN
-            LINE (BlockPos(CurrentColumn), StartY)-(BlockPos(CurrentColumn) + BlockWidth, EndY), Shade&(Board(i, CurrentColumn).Shade), BF
-        END IF
-    NEXT CurrentColumn
-NEXT i
+            IF Board(i, CurrentColumn).State = True THEN
+                LINE (BlockPos(CurrentColumn), StartY)-(BlockPos(CurrentColumn) + BlockWidth, EndY), Shade&(Board(i, CurrentColumn).Shade), BF
+            END IF
+        NEXT CurrentColumn
+    NEXT i
 
 END SUB
 
 SUB ShowScore
-DIM ScoreString AS STRING
-DIM ModeHighScore AS LONG
+    DIM ScoreString AS STRING
+    DIM ModeHighScore AS LONG
 
-IF Score = PreviousScore THEN EXIT SUB
-PreviousScore = Score
+    IF Score = PreviousScore THEN EXIT SUB
+    PreviousScore = Score
 
-ScoreString = "Score:" + STR$(Score)
+    ScoreString = "Score:" + STR$(Score)
 
-SELECT CASE GameMode
-    CASE ZENMODE: ModeHighScore = Settings.HighscoreZEN
-    CASE NORMALMODE: ModeHighScore = Settings.HighscoreNORMAL
-    CASE FLASHMODE: ModeHighScore = Settings.HighscoreFLASH
-    CASE FILLMODE: ModeHighScore = Settings.HighscoreFILL
-END SELECT
+    SELECT CASE GameMode
+        CASE ZENMODE: ModeHighScore = Settings.HighscoreZEN
+        CASE NORMALMODE: ModeHighScore = Settings.HighscoreNORMAL
+        CASE FLASHMODE: ModeHighScore = Settings.HighscoreFLASH
+        CASE FILLMODE: ModeHighScore = Settings.HighscoreFILL
+    END SELECT
 
-_DEST InfoScreen
-CLS , _RGBA32(0, 0, 0, 0)
+    _DEST InfoScreen
+    CLS , _RGBA32(0, 0, 0, 0)
 
-'_FONT 16
-PrintShadow 15, 15, ScoreString, _RGB32(255, 255, 255)
+    '_FONT 16
+    PrintShadow 15, 15, ScoreString, _RGB32(255, 255, 255)
 
-_FONT 8
-IF Score < ModeHighScore THEN
-    PrintShadow 15, 32, "Highscore: " + TRIM$(ModeHighScore), _RGB32(255, 255, 255)
-ELSEIF Score > ModeHighScore AND ModeHighScore > 0 THEN
-    PrintShadow 15, 32, "You beat the highscore!", _RGB32(255, 255, 255)
-END IF
-_FONT 16
-_DEST GameScreen
+    _FONT 8
+    IF Score < ModeHighScore THEN
+        PrintShadow 15, 32, "Highscore: " + TRIM$(ModeHighScore), _RGB32(255, 255, 255)
+    ELSEIF Score > ModeHighScore AND ModeHighScore > 0 THEN
+        PrintShadow 15, 32, "You beat the highscore!", _RGB32(255, 255, 255)
+    END IF
+    _FONT 16
+    _DEST GameScreen
 
 END SUB
 
 SUB MakeIcon
-'Generates the icon that will be placed on the window title of the game
-DIM Icon AS LONG
-DIM PreviousDest AS LONG
-DIM i AS LONG
-CONST IconSize = 16
+    'Generates the icon that will be placed on the window title of the game
+    DIM Icon AS LONG
+    DIM PreviousDest AS LONG
+    DIM i AS LONG
+    CONST IconSize = 16
 
-Icon = _NEWIMAGE(IconSize, IconSize, 32)
-PreviousDest = _DEST
-_DEST Icon
+    Icon = _NEWIMAGE(IconSize, IconSize, 32)
+    PreviousDest = _DEST
+    _DEST Icon
 
-FOR i = 1 TO 5
-    LINE (0, i * (IconSize / 5) - (IconSize / 5))-(IconSize, i * (IconSize / 5)), Shade&(i), BF
-NEXT i
+    FOR i = 1 TO 5
+        LINE (0, i * (IconSize / 5) - (IconSize / 5))-(IconSize, i * (IconSize / 5)), Shade&(i), BF
+    NEXT i
 
-_ICON Icon
-_FREEIMAGE Icon
+    _ICON Icon
+    _FREEIMAGE Icon
 
-_DEST PreviousDest
+    _DEST PreviousDest
 END SUB
 
 SUB CheckDanger
-'Checks if any block pile is 11 blocks high, which
-'means danger, which means player needs to think faster,
-'which means we'll make him a little bit more nervous by
-'switching our soothing bg song to a fast paced circus
-'like melody.
-IF Board(11, 1).State OR Board(11, 2).State OR Board(11, 3).State OR Board(11, 4).State THEN
-    IF Settings.SoundOn AND NOT InDanger AND NOT DemoMode THEN
-        IF Alarm THEN _SNDPLAYCOPY Alarm
-        IF Settings.MusicOn THEN
-            IF GameMode <> FILLMODE THEN
-                IF BgMusic(GameMode) THEN _SNDSTOP BgMusic(GameMode)
-            ELSE
-                IF BgMusic(ZENMODE) THEN _SNDSTOP BgMusic(ZENMODE)
+    'Checks if any block pile is 11 blocks high, which
+    'means danger, which means player needs to think faster,
+    'which means we'll make him a little bit more nervous by
+    'switching our soothing bg song to a fast paced circus
+    'like melody.
+    IF Board(11, 1).State OR Board(11, 2).State OR Board(11, 3).State OR Board(11, 4).State THEN
+        IF Settings.SoundOn AND NOT InDanger AND NOT DemoMode THEN
+            IF Alarm THEN _SNDPLAYCOPY Alarm
+            IF Settings.MusicOn THEN
+                IF GameMode <> FILLMODE THEN
+                    IF BgMusic(GameMode) THEN _SNDSTOP BgMusic(GameMode)
+                ELSE
+                    IF BgMusic(ZENMODE) THEN _SNDSTOP BgMusic(ZENMODE)
+                END IF
+                IF BgMusic(4) THEN _SNDLOOP BgMusic(4)
             END IF
-            IF BgMusic(4) THEN _SNDLOOP BgMusic(4)
+            TIMER(AlertTimer) ON
         END IF
-        TIMER(AlertTimer) ON
-    END IF
-    InDanger = True
-ELSE
-    IF Settings.MusicOn AND InDanger AND NOT DemoMode THEN
-        IF BgMusic(4) THEN _SNDSTOP BgMusic(4)
-        IF GameMode <> FILLMODE THEN
-            IF BgMusic(GameMode) THEN _SNDLOOP BgMusic(GameMode)
-        ELSE
-            IF BgMusic(ZENMODE) THEN _SNDLOOP BgMusic(ZENMODE)
+        InDanger = True
+    ELSE
+        IF Settings.MusicOn AND InDanger AND NOT DemoMode THEN
+            IF BgMusic(4) THEN _SNDSTOP BgMusic(4)
+            IF GameMode <> FILLMODE THEN
+                IF BgMusic(GameMode) THEN _SNDLOOP BgMusic(GameMode)
+            ELSE
+                IF BgMusic(ZENMODE) THEN _SNDLOOP BgMusic(ZENMODE)
+            END IF
+            TIMER(AlertTimer) OFF
+            _DEST OverlayGraphics
+            CLS , _RGBA32(0, 0, 0, 0)
+            _DEST GameScreen
         END IF
-        TIMER(AlertTimer) OFF
-        _DEST OverlayGraphics
-        CLS , _RGBA32(0, 0, 0, 0)
-        _DEST GameScreen
+        InDanger = False
     END IF
-    InDanger = False
-END IF
 END SUB
 
 SUB LoadAssets
-'Loads sound files at startup.
-DIM i AS _BYTE
+    'Loads sound files at startup.
+    DIM i AS _BYTE
 
-LineSound = _SNDOPEN("line.ogg", "SYNC")
-GameOverSound = _SNDOPEN("gameover.ogg", "SYNC")
-Whistle = _SNDOPEN("whistle.ogg", "SYNC,VOL")
-IF Whistle THEN _SNDVOL Whistle, 0.02
+    LineSound = _SNDOPEN("line.ogg", "SYNC")
+    GameOverSound = _SNDOPEN("gameover.ogg", "SYNC")
+    Whistle = _SNDOPEN("whistle.ogg", "SYNC,VOL")
+    IF Whistle THEN _SNDVOL Whistle, 0.02
 
-Alarm = _SNDOPEN("alarm.ogg", "SYNC")
-ShockSound = _SNDOPEN("shock.ogg", "SYNC")
+    Alarm = _SNDOPEN("alarm.ogg", "SYNC")
+    ShockSound = _SNDOPEN("shock.ogg", "SYNC")
 
-FOR i = 1 TO 3
-    IF NOT DropSound(i) THEN DropSound(i) = _SNDOPEN("drop" + TRIM$(i) + ".ogg", "SYNC")
-NEXT i
+    FOR i = 1 TO 3
+        IF NOT DropSound(i) THEN DropSound(i) = _SNDOPEN("drop" + TRIM$(i) + ".ogg", "SYNC")
+    NEXT i
 
-FOR i = 1 TO 4
-    IF NOT SplashSound(i) THEN SplashSound(i) = _SNDOPEN("water" + TRIM$(i) + ".ogg", "SYNC")
-NEXT i
+    FOR i = 1 TO 4
+        IF NOT SplashSound(i) THEN SplashSound(i) = _SNDOPEN("water" + TRIM$(i) + ".ogg", "SYNC")
+    NEXT i
 
-BgMusic(1) = _SNDOPEN("Water_Prelude.ogg", "SYNC,VOL")
-BgMusic(2) = _SNDOPEN("Crowd_Hammer.ogg", "SYNC,VOL")
-BgMusic(3) = _SNDOPEN("Upbeat_Forever.ogg", "SYNC,VOL")
-BgMusic(4) = _SNDOPEN("quick.ogg", "SYNC,VOL")
-IF BgMusic(1) THEN _SNDVOL BgMusic(1), .2
-IF BgMusic(4) THEN _SNDVOL BgMusic(4), .8
+    BgMusic(1) = _SNDOPEN("Water_Prelude.ogg", "SYNC,VOL")
+    BgMusic(2) = _SNDOPEN("Crowd_Hammer.ogg", "SYNC,VOL")
+    BgMusic(3) = _SNDOPEN("Upbeat_Forever.ogg", "SYNC,VOL")
+    BgMusic(4) = _SNDOPEN("quick.ogg", "SYNC,VOL")
+    IF BgMusic(1) THEN _SNDVOL BgMusic(1), .2
+    IF BgMusic(4) THEN _SNDVOL BgMusic(4), .8
 
 END SUB
 
 SUB UpdateScreen
-'Display the gamescreen, overlay and score layers
-IF NOT DemoMode THEN ShowScore
+    'Display the gamescreen, overlay and score layers
+    IF NOT DemoMode THEN ShowScore
 
-_PUTIMAGE , GameScreen, MainScreen
-IF InMenu OR InDanger OR InWatchOut THEN
-    _PUTIMAGE , OverlayGraphics, MainScreen
-    IF MenuTip THEN
-        _PUTIMAGE (_WIDTH(MainScreen) \ 2 - _WIDTH(MenuTip) \ 2, _HEIGHT(MainScreen) \ 2 - _HEIGHT(MenuTip) \ 2), MenuTip, MainScreen
+    _PUTIMAGE , GameScreen, MainScreen
+    IF InMenu OR InDanger OR InWatchOut THEN
+        _PUTIMAGE , OverlayGraphics, MainScreen
+        IF MenuTip THEN
+            _PUTIMAGE (_WIDTH(MainScreen) \ 2 - _WIDTH(MenuTip) \ 2, _HEIGHT(MainScreen) \ 2 - _HEIGHT(MenuTip) \ 2), MenuTip, MainScreen
+        END IF
     END IF
-END IF
 
-IF NOT InMenu THEN _PUTIMAGE , InfoScreen, MainScreen
-_DISPLAY
+    IF NOT InMenu THEN _PUTIMAGE , InfoScreen, MainScreen
+    _DISPLAY
 END SUB
 
 SUB PrintShadow (x%, y%, Text$, ForeColor&)
-'Shadow:
-COLOR _RGBA32(170, 170, 170, 170), _RGBA32(0, 0, 0, 0)
-_PRINTSTRING (x% + 1, y% + 1), Text$
+    'Shadow:
+    COLOR _RGBA32(170, 170, 170, 170), _RGBA32(0, 0, 0, 0)
+    _PRINTSTRING (x% + 1, y% + 1), Text$
 
-'Text:
-COLOR ForeColor&, _RGBA32(0, 0, 0, 0)
-_PRINTSTRING (x%, y%), Text$
+    'Text:
+    COLOR ForeColor&, _RGBA32(0, 0, 0, 0)
+    _PRINTSTRING (x%, y%), Text$
 END SUB
 
 SUB SelectGlobalShade
-IF Settings.ColorMode = 0 THEN
-    GlobalShade = (GlobalShade) MOD MaxShades + 1
-ELSE
-    GlobalShade = Settings.ColorMode
-END IF
-SELECT CASE GlobalShade
-    CASE 1: RESTORE Greens
-    CASE 2: RESTORE Oranges
-    CASE 3: RESTORE Blues
-    CASE 4: RESTORE Pinks
-END SELECT
+    IF Settings.ColorMode = 0 THEN
+        GlobalShade = (GlobalShade) MOD MaxShades + 1
+    ELSE
+        GlobalShade = Settings.ColorMode
+    END IF
+    SELECT CASE GlobalShade
+        CASE 1: RESTORE Greens
+        CASE 2: RESTORE Oranges
+        CASE 3: RESTORE Blues
+        CASE 4: RESTORE Pinks
+    END SELECT
 
-FOR i = 1 TO 5
-    READ Shades(i).R
-    READ Shades(i).G
-    READ Shades(i).B
-NEXT i
+    FOR i = 1 TO 5
+        READ Shades(i).R
+        READ Shades(i).G
+        READ Shades(i).B
+    NEXT i
 
 END SUB
 
 SUB PrepareIntro
-'The intro shows the board about to be cleared,
-'which then happens after assets are loaded. The intro
-'is generated using the game engine.
+    'The intro shows the board about to be cleared,
+    'which then happens after assets are loaded. The intro
+    'is generated using the game engine.
 
-'DemoMode prevents sounds to be played
-DemoMode = True
+    'DemoMode prevents sounds to be played
+    DemoMode = True
 
-_DEST InfoScreen
-_FONT 16
-LoadingMessage$ = "Cloned Shades"
-PrintShadow _WIDTH \ 2 - _PRINTWIDTH(LoadingMessage$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT, LoadingMessage$, _RGB32(255, 255, 255)
+    _DEST InfoScreen
+    _FONT 16
+    LoadingMessage$ = "Cloned Shades"
+    PrintShadow _WIDTH \ 2 - _PRINTWIDTH(LoadingMessage$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT, LoadingMessage$, _RGB32(255, 255, 255)
 
-_FONT 8
-LoadingMessage$ = "loading..."
-PrintShadow _WIDTH \ 2 - _PRINTWIDTH(LoadingMessage$) \ 2, _HEIGHT \ 2, LoadingMessage$, _RGB32(255, 255, 255)
+    _FONT 8
+    LoadingMessage$ = "loading..."
+    PrintShadow _WIDTH \ 2 - _PRINTWIDTH(LoadingMessage$) \ 2, _HEIGHT \ 2, LoadingMessage$, _RGB32(255, 255, 255)
 
-_FONT 16
-_DEST GameScreen
+    _FONT 16
+    _DEST GameScreen
 
-'Setup the board to show an "about to merge" group of blocks
-'which will end up completing a dark line at the bottom.
-Board(1, 1).State = True
-Board(1, 1).Shade = 5
-Board(1, 2).State = True
-Board(1, 2).Shade = 5
-Board(1, 3).State = True
-Board(1, 3).Shade = 4
-Board(1, 4).State = True
-Board(1, 4).Shade = 5
-Board(2, 3).State = True
-Board(2, 3).Shade = 3
-Board(3, 3).State = True
-Board(3, 3).Shade = 2
-Board(4, 3).State = True
-Board(4, 3).Shade = 2
+    'Setup the board to show an "about to merge" group of blocks
+    'which will end up completing a dark line at the bottom.
+    Board(1, 1).State = True
+    Board(1, 1).Shade = 5
+    Board(1, 2).State = True
+    Board(1, 2).Shade = 5
+    Board(1, 3).State = True
+    Board(1, 3).Shade = 4
+    Board(1, 4).State = True
+    Board(1, 4).Shade = 5
+    Board(2, 3).State = True
+    Board(2, 3).Shade = 3
+    Board(3, 3).State = True
+    Board(3, 3).Shade = 2
+    Board(4, 3).State = True
+    Board(4, 3).Shade = 2
 
-CurrentColumn = 3
-CurrentRow = 4
-CurrentShade = 2
-Y = BlockRows(CurrentRow)
-PrevY = Y
-BlockPut = True
+    CurrentColumn = 3
+    CurrentRow = 4
+    CurrentShade = 2
+    Y = BlockRows(CurrentRow)
+    PrevY = Y
+    BlockPut = True
 
-RedrawBoard
-Board(4, 3).State = False
+    RedrawBoard
+    Board(4, 3).State = False
 
-UpdateScreen
-IF INSTR(_OS$, "WIN") THEN _SCREENMOVE _MIDDLE
+    UpdateScreen
+    IF INSTR(_OS$, "WIN") THEN _SCREENMOVE _MIDDLE
 END SUB
 
 SUB Intro
-'The current board setup must have been prepared using PrepareIntro first.
+    'The current board setup must have been prepared using PrepareIntro first.
 
-'Use the game engine to show the intro:
-CheckMerge
-CheckConnectedLines
+    'Use the game engine to show the intro:
+    CheckMerge
+    CheckConnectedLines
 
-'Clear the "loading..." text
-_DEST InfoScreen
-CLS , _RGBA32(0, 0, 0, 0)
-_DEST GameScreen
+    'Clear the "loading..." text
+    _DEST InfoScreen
+    CLS , _RGBA32(0, 0, 0, 0)
+    _DEST GameScreen
 
 END SUB
 
 SUB HighLightCol (Col AS LONG)
 
-_DEST OverlayGraphics
-CLS , _RGBA32(0, 0, 0, 0)
-LINE (BlockPos(Col), 16)-STEP(BlockWidth, _HEIGHT(0)), _RGBA32(255, 255, 255, 150), BF
-_DEST GameScreen
+    _DEST OverlayGraphics
+    CLS , _RGBA32(0, 0, 0, 0)
+    LINE (BlockPos(Col), 16)-STEP(BlockWidth, _HEIGHT(0)), _RGBA32(255, 255, 255, 150), BF
+    _DEST GameScreen
 
 END SUB
 
 SUB ShowAlert
-STATIC FadeLevel
-DIM DangerMessage$
-DIM PreviousDest AS LONG
+    STATIC FadeLevel
+    DIM DangerMessage$
+    DIM PreviousDest AS LONG
 
-IF InMenu OR InWatchOut THEN EXIT SUB
+    IF InMenu OR InWatchOut THEN EXIT SUB
 
-IF FadeLevel > 100 THEN FadeLevel = 0
-FadeLevel = FadeLevel + 1
-PreviousDest = _DEST
-_DEST OverlayGraphics
-IF GameMode = FILLMODE THEN CLS , _RGBA32(0, 255, 0, FadeLevel) ELSE CLS , _RGBA32(255, 0, 0, FadeLevel)
-IF GameMode = FILLMODE THEN DangerMessage$ = "BE EXTRA CAREFUL!" ELSE DangerMessage$ = "DANGER!"
-PrintShadow _WIDTH \ 2 - _PRINTWIDTH(DangerMessage$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT \ 2, DangerMessage$, _RGB32(255, 255, 255)
-_DEST PreviousDest
+    IF FadeLevel > 100 THEN FadeLevel = 0
+    FadeLevel = FadeLevel + 1
+    PreviousDest = _DEST
+    _DEST OverlayGraphics
+    IF GameMode = FILLMODE THEN CLS , _RGBA32(0, 255, 0, FadeLevel) ELSE CLS , _RGBA32(255, 0, 0, FadeLevel)
+    IF GameMode = FILLMODE THEN DangerMessage$ = "BE EXTRA CAREFUL!" ELSE DangerMessage$ = "DANGER!"
+    PrintShadow _WIDTH \ 2 - _PRINTWIDTH(DangerMessage$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT \ 2, DangerMessage$, _RGB32(255, 255, 255)
+    _DEST PreviousDest
 END SUB
 
 SUB ShowGetReady (CountDown AS _BYTE)
-DIM Message$, i AS _BYTE, i$, iSnd AS _BYTE
-DIM PreviousDest AS LONG
+    DIM Message$, i AS _BYTE, i$, iSnd AS _BYTE
+    DIM PreviousDest AS LONG
 
-PreviousDest = _DEST
-DemoMode = True: InMenu = True
-_DEST OverlayGraphics
-Message$ = "GET READY"
-FOR i = CountDown TO 1 STEP -1
-    CLS , _RGBA32(255, 255, 255, 200)
-    PrintShadow _WIDTH \ 2 - _PRINTWIDTH(Message$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT \ 2, Message$, _RGB32(0, 0, 0)
-    IF i = 1 THEN i$ = "GO!" ELSE i$ = TRIM$(i)
-    PrintShadow _WIDTH \ 2 - _PRINTWIDTH(i$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT \ 2 + _FONTHEIGHT, i$, Shade&(5)
-    UpdateScreen
-    iSnd = _CEIL(RND * 3): IF DropSound(iSnd) THEN _SNDPLAYCOPY DropSound(iSnd)
-    _DELAY .5
-NEXT i
-_DEST PreviousDest
-DemoMode = False: InMenu = False
+    PreviousDest = _DEST
+    DemoMode = True: InMenu = True
+    _DEST OverlayGraphics
+    Message$ = "GET READY"
+    FOR i = CountDown TO 1 STEP -1
+        CLS , _RGBA32(255, 255, 255, 200)
+        PrintShadow _WIDTH \ 2 - _PRINTWIDTH(Message$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT \ 2, Message$, _RGB32(0, 0, 0)
+        IF i = 1 THEN i$ = "GO!" ELSE i$ = TRIM$(i)
+        PrintShadow _WIDTH \ 2 - _PRINTWIDTH(i$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT \ 2 + _FONTHEIGHT, i$, Shade&(5)
+        UpdateScreen
+        iSnd = _CEIL(RND * 3): IF DropSound(iSnd) THEN _SNDPLAYCOPY DropSound(iSnd)
+        _DELAY .5
+    NEXT i
+    _DEST PreviousDest
+    DemoMode = False: InMenu = False
 END SUB
 
 FUNCTION Menu (CurrentChoice AS _BYTE, MaxChoice AS _BYTE, Choices() AS STRING, Info() AS STRING, Tips() AS LONG, TipTime AS DOUBLE)
-'Displays Choices() on the screen and lets the player choose one.
-'Uses OverlayGraphics page to display options.
-'Player must use arrow keys to make a choice then ENTER.
+    'Displays Choices() on the screen and lets the player choose one.
+    'Uses OverlayGraphics page to display options.
+    'Player must use arrow keys to make a choice then ENTER.
 
-DIM Choice AS _BYTE, PreviousChoice AS _BYTE
-DIM ChoiceWasMade AS _BIT
-DIM k$, i AS LONG
-DIM ChooseColorTimer AS LONG
-DIM ItemShade AS LONG
-DIM ThisItemY AS LONG
-DIM ThisTime AS DOUBLE, StartTime AS DOUBLE, TipShown AS _BIT
+    DIM Choice AS _BYTE, PreviousChoice AS _BYTE
+    DIM ChoiceWasMade AS _BIT
+    DIM k$, i AS LONG
+    DIM ChooseColorTimer AS LONG
+    DIM ItemShade AS LONG
+    DIM ThisItemY AS LONG
+    DIM ThisTime AS DOUBLE, StartTime AS DOUBLE, TipShown AS _BIT
 
-DemoMode = True
-InMenu = True
-Choice = CurrentChoice
+    DemoMode = True
+    InMenu = True
+    Choice = CurrentChoice
 
-IF NOT InGame THEN
-    ChooseColorTimer = _FREETIMER
-    ON TIMER(ChooseColorTimer, 3.5) SelectGlobalShade
-    TIMER(ChooseColorTimer) ON
-END IF
-
-IF NOT InGame THEN ERASE Board: BlockPut = True
-
-StartTime = TIMER
-DO
-    _LIMIT 30
-
-    'Use the game engine while the menu is displayed, except while InGame:
     IF NOT InGame THEN
-        IF BlockPut THEN
-            GenerateNewBlock: BlockPut = False
+        ChooseColorTimer = _FREETIMER
+        ON TIMER(ChooseColorTimer, 3.5) SelectGlobalShade
+        TIMER(ChooseColorTimer) ON
+    END IF
+
+    IF NOT InGame THEN ERASE Board: BlockPut = True
+
+    StartTime = TIMER
+    DO
+        _LIMIT 30
+
+        'Use the game engine while the menu is displayed, except while InGame:
+        IF NOT InGame THEN
+            IF BlockPut THEN
+                GenerateNewBlock: BlockPut = False
+            ELSE
+                MoveBlock
+            END IF
+        END IF
+
+        GOSUB ShowCurrentChoice
+        ThisTime = TIMER
+        IF ThisTime - StartTime >= TipTime AND NOT TipShown THEN
+            'TipTime has passed since the user selected the current choice, so
+            'if Tips(Choice) contains an image, it is _PUTIMAGEd on the screen.
+            IF Tips(Choice) < -1 THEN
+                MenuTip = Tips(Choice)
+                TipShown = True
+            END IF
+        END IF
+
+        k$ = INKEY$
+        SELECT CASE k$
+            CASE CHR$(0) + CHR$(80) 'Down arrow
+                DO
+                    Choice = (Choice) MOD MaxChoice + 1
+                LOOP WHILE RIGHT$(Choices(Choice), 1) = CHR$(0)
+                StartTime = TIMER
+                TipShown = False
+                MenuTip = False
+            CASE CHR$(0) + CHR$(72) 'Up arrow
+                DO
+                    Choice = (Choice + MaxChoice - 2) MOD MaxChoice + 1
+                LOOP WHILE RIGHT$(Choices(Choice), 1) = CHR$(0)
+                StartTime = TIMER
+                TipShown = False
+                MenuTip = False
+            CASE CHR$(13) 'Enter
+                ChoiceWasMade = True
+                MenuTip = False
+            CASE CHR$(27) 'ESC
+                ChoiceWasMade = True
+                Choice = MaxChoice
+        END SELECT
+    LOOP UNTIL ChoiceWasMade
+
+    IF NOT InGame THEN TIMER(ChooseColorTimer) FREE
+    InMenu = False
+    DemoMode = False
+    _DEST OverlayGraphics
+    CLS , _RGBA32(255, 255, 255, 100)
+    _DEST GameScreen
+
+    MenuTip = False
+    FOR i = 1 TO MaxChoice
+        IF Tips(i) < -1 THEN _FREEIMAGE Tips(i)
+    NEXT i
+
+    Menu = Choice
+    EXIT FUNCTION
+
+    ShowCurrentChoice:
+    IF Choice = PreviousChoice THEN RETURN
+    _DEST OverlayGraphics
+    CLS , _RGBA32(255, 255, 255, 100)
+
+    'Choices ending with CHR$(0) are shown as unavailable/grey.
+    ThisItemY = (_HEIGHT(OverlayGraphics) / 2) - (((_FONTHEIGHT * MaxChoice) + _FONTHEIGHT) / 2)
+    FOR i = 1 TO MaxChoice
+        ThisItemY = ThisItemY + _FONTHEIGHT
+        IF i = Choice THEN
+            ItemShade = Shade&(5)
+            PrintShadow (_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH("> " + Choices(i)) \ 2), ThisItemY, CHR$(16) + Choices(i), ItemShade
         ELSE
-            MoveBlock
+            IF RIGHT$(Choices(i), 1) = CHR$(0) THEN
+                ItemShade = _RGB32(255, 255, 255)
+                PrintShadow (_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH(LEFT$(Choices(i), LEN(Choices(i)) - 1)) \ 2), ThisItemY, LEFT$(Choices(i), LEN(Choices(i)) - 1), ItemShade
+            ELSE
+                ItemShade = Shade&(4)
+                PrintShadow (_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH(Choices(i)) \ 2), ThisItemY, Choices(i), ItemShade
+            END IF
         END IF
-    END IF
-
-    GOSUB ShowCurrentChoice
-    ThisTime = TIMER
-    IF ThisTime - StartTime >= TipTime AND NOT TipShown THEN
-        'TipTime has passed since the user selected the current choice, so
-        'if Tips(Choice) contains an image, it is _PUTIMAGEd on the screen.
-        IF Tips(Choice) < -1 THEN
-            MenuTip = Tips(Choice)
-            TipShown = True
+        IF LEN(Info(i)) AND i = Choice THEN
+            _FONT 8
+            COLOR Shade&(5)
+            _PRINTSTRING ((_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH(Info(i)) \ 2), _HEIGHT(OverlayGraphics) - 8), Info(i)
+            _FONT 16
         END IF
-    END IF
-
-    k$ = INKEY$
-    SELECT CASE k$
-        CASE CHR$(0) + CHR$(80) 'Down arrow
-            DO
-                Choice = (Choice) MOD MaxChoice + 1
-            LOOP WHILE RIGHT$(Choices(Choice), 1) = CHR$(0)
-            StartTime = TIMER
-            TipShown = False
-            MenuTip = False
-        CASE CHR$(0) + CHR$(72) 'Up arrow
-            DO
-                Choice = (Choice + MaxChoice - 2) MOD MaxChoice + 1
-            LOOP WHILE RIGHT$(Choices(Choice), 1) = CHR$(0)
-            StartTime = TIMER
-            TipShown = False
-            MenuTip = False
-        CASE CHR$(13) 'Enter
-            ChoiceWasMade = True
-            MenuTip = False
-        CASE CHR$(27) 'ESC
-            ChoiceWasMade = True
-            Choice = MaxChoice
-    END SELECT
-LOOP UNTIL ChoiceWasMade
-
-IF NOT InGame THEN TIMER(ChooseColorTimer) FREE
-InMenu = False
-DemoMode = False
-_DEST OverlayGraphics
-CLS , _RGBA32(255, 255, 255, 100)
-_DEST GameScreen
-
-MenuTip = False
-FOR i = 1 TO MaxChoice
-    IF Tips(i) < -1 THEN _FREEIMAGE Tips(i)
-NEXT i
-
-Menu = Choice
-EXIT FUNCTION
-
-ShowCurrentChoice:
-IF Choice = PreviousChoice THEN RETURN
-_DEST OverlayGraphics
-CLS , _RGBA32(255, 255, 255, 100)
-
-'Choices ending with CHR$(0) are shown as unavailable/grey.
-ThisItemY = (_HEIGHT(OverlayGraphics) / 2) - (((_FONTHEIGHT * MaxChoice) + _FONTHEIGHT) / 2)
-FOR i = 1 TO MaxChoice
-    ThisItemY = ThisItemY + _FONTHEIGHT
-    IF i = Choice THEN
-        ItemShade = Shade&(5)
-        PrintShadow (_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH("> " + Choices(i)) \ 2), ThisItemY, CHR$(16) + Choices(i), ItemShade
-    ELSE
-        IF RIGHT$(Choices(i), 1) = CHR$(0) THEN
-            ItemShade = _RGB32(255, 255, 255)
-            PrintShadow (_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH(LEFT$(Choices(i), LEN(Choices(i)) - 1)) \ 2), ThisItemY, LEFT$(Choices(i), LEN(Choices(i)) - 1), ItemShade
-        ELSE
-            ItemShade = Shade&(4)
-            PrintShadow (_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH(Choices(i)) \ 2), ThisItemY, Choices(i), ItemShade
-        END IF
-    END IF
-    IF LEN(Info(i)) AND i = Choice THEN
-        _FONT 8
-        COLOR Shade&(5)
-        _PRINTSTRING ((_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH(Info(i)) \ 2), _HEIGHT(OverlayGraphics) - 8), Info(i)
-        _FONT 16
-    END IF
-NEXT i
-_DEST GameScreen
-UpdateScreen
-PreviousChoice = Choice
-RETURN
+    NEXT i
+    _DEST GameScreen
+    UpdateScreen
+    PreviousChoice = Choice
+    RETURN
 
 END FUNCTION
 
 SUB ShowEndScreen
-DIM Message$(1 TO 10), k$, i AS LONG
-DIM MessageColor AS LONG
+    DIM Message$(1 TO 10), k$, i AS LONG
+    DIM MessageColor AS LONG
 
-IF InDanger THEN
-    TIMER(AlertTimer) OFF
-    InDanger = False
-END IF
+    IF InDanger THEN
+        TIMER(AlertTimer) OFF
+        InDanger = False
+    END IF
 
-_DEST OverlayGraphics
-CLS , _RGBA32(255, 255, 255, 150)
+    _DEST OverlayGraphics
+    CLS , _RGBA32(255, 255, 255, 150)
 
-IF GameMode = FILLMODE AND Score > 0 THEN Message$(1) = "YOU WIN!" ELSE Message$(1) = "GAME OVER"
-Message$(3) = "Your score:"
-Message$(4) = TRIM$(Score)
-Message$(5) = "Merged blocks:"
-Message$(6) = TRIM$(TotalMerges)
-Message$(7) = "Lines destroyed:"
-Message$(8) = TRIM$(TotalLines)
-Message$(10) = "Press ENTER..."
+    IF GameMode = FILLMODE AND Score > 0 THEN Message$(1) = "YOU WIN!" ELSE Message$(1) = "GAME OVER"
+    Message$(3) = "Your score:"
+    Message$(4) = TRIM$(Score)
+    Message$(5) = "Merged blocks:"
+    Message$(6) = TRIM$(TotalMerges)
+    Message$(7) = "Lines destroyed:"
+    Message$(8) = TRIM$(TotalLines)
+    Message$(10) = "Press ENTER..."
 
-MessageColor = Shade&(5)
-FOR i = 1 TO UBOUND(message$)
-    IF i > 1 THEN _FONT 8: MessageColor = _RGB(0, 0, 0)
-    IF i = UBOUND(message$) THEN _FONT 16: MessageColor = Shade&(5)
-    PrintShadow (_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH(Message$(i)) \ 2), i * 16, Message$(i), MessageColor
-NEXT i
+    MessageColor = Shade&(5)
+    FOR i = 1 TO UBOUND(message$)
+        IF i > 1 THEN _FONT 8: MessageColor = _RGB(0, 0, 0)
+        IF i = UBOUND(message$) THEN _FONT 16: MessageColor = Shade&(5)
+        PrintShadow (_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH(Message$(i)) \ 2), i * 16, Message$(i), MessageColor
+    NEXT i
 
-_DEST MainScreen
+    _DEST MainScreen
 
-FOR i = 1 TO _HEIGHT(MainScreen) / 2 STEP BlockHeight / 2
-    _LIMIT 60
+    FOR i = 1 TO _HEIGHT(MainScreen) / 2 STEP BlockHeight / 2
+        _LIMIT 60
+        _PUTIMAGE , GameScreen
+        _PUTIMAGE (0, _HEIGHT(MainScreen) / 2 - i)-(599, _HEIGHT(MainScreen) / 2 + i), OverlayGraphics
+        _DISPLAY
+    NEXT i
+
     _PUTIMAGE , GameScreen
-    _PUTIMAGE (0, _HEIGHT(MainScreen) / 2 - i)-(599, _HEIGHT(MainScreen) / 2 + i), OverlayGraphics
+    _PUTIMAGE , OverlayGraphics
     _DISPLAY
-NEXT i
+    _DEST GameScreen
 
-_PUTIMAGE , GameScreen
-_PUTIMAGE , OverlayGraphics
-_DISPLAY
-_DEST GameScreen
-
-_KEYCLEAR
-k$ = "": WHILE k$ <> CHR$(13): _LIMIT 30: k$ = INKEY$: WEND
+    _KEYCLEAR
+    k$ = "": WHILE k$ <> CHR$(13): _LIMIT 30: k$ = INKEY$: WEND
 
 END SUB
 
 FUNCTION TRIM$ (Number)
-TRIM$ = LTRIM$(RTRIM$(STR$(Number)))
+    TRIM$ = LTRIM$(RTRIM$(STR$(Number)))
 END FUNCTION
 
