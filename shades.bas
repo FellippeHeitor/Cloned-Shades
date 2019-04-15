@@ -42,17 +42,53 @@
 '       - Code is a bit easier to read, after I moved most of the main
 '         loop code into separate subroutines.
 '       - SCORES ON THE SCREEN!
+'
+' - Beta 4
+'       - Adaptative resolution when the desktop isn't at least 900px tall.
+'       - New shades, which are alternated every time a new game is started.
+'       - Visual intro, mimicking the original game's.
+'       - Improved game performance by selectively limiting the layering of
+'         images in SUB UpdateScreen.
+'       - Added a "danger mode" visual indication, by turning on a TIMER that
+'         overlays a shade of red over the game play, similar to a security
+'         alarm.
+'       - Added a menu to start the game or change setting or leave.
+'       - Settings are now saved to "shades.dat", and include switches for
+'         sound and music, as well as a highscore.
+'       - Added an end screen, that shows the score, number of merges and
+'         number of lines destroyed during game.
 
 _TITLE "Cloned Shades"
 
-'Game constants: ------------------------------------------------------
-CONST True = -1
+'Game constants -------------------------------------------------------
+'General Use:
 CONST False = 0
+CONST True = NOT False
+
+'Game definitions:
 CONST BlockWidth = 150
 CONST BlockHeight = 64
-CONST TopAnimationSteps = 30
-CONST MergeSteps = 64
-CONST DefaultIncrement = 2
+CONST InitialIncrement = 1
+
+'Animations:
+CONST TopAnimationSteps = 15
+CONST MergeSteps = 32
+
+'Colors:
+CONST BackgroundColor = _RGB32(170, 170, 170)
+CONST MaxShades = 4
+
+'Menu actions:
+CONST PLAYGAME = 1
+CONST SETTINGSMENU = 2
+CONST LEAVEGAME = 3
+CONST SWITCHSOUND = 1
+CONST SWITCHMUSIC = 2
+CONST RESETHIGHSCORES = 3
+CONST MAINMENU = 4
+
+'Misc:
+CONST FileID = "CLONEDSHADES"
 
 'Type definitions: ----------------------------------------------------
 TYPE ColorRGB
@@ -66,49 +102,73 @@ TYPE BoardType
     Shade AS INTEGER
 END TYPE
 
-'Variables for game control -------------------------------------------
+TYPE SettingsFile
+    ID AS STRING * 13
+    SoundOn AS _BYTE
+    MusicOn AS _BYTE
+    Highscore AS LONG
+END TYPE
+
+'Variables ------------------------------------------------------------
+'Variables for game control:
 DIM SHARED Board(1 TO 12, 1 TO 4) AS BoardType
 DIM SHARED Shades(1 TO 5) AS ColorRGB, FadeStep AS INTEGER
-DIM SHARED BlockPos(1 TO 4) AS INTEGER, BackgroundColor AS LONG
+DIM SHARED BlockPos(1 TO 4) AS INTEGER
 DIM SHARED BlockRows(1 TO 12) AS INTEGER, BgImage AS LONG
 DIM SHARED i AS INTEGER, Increment AS INTEGER
 DIM SHARED CurrentRow AS INTEGER, CurrentColumn AS INTEGER
-DIM SHARED BlockPut AS _BYTE, Y AS INTEGER, PrevY AS INTEGER
+DIM SHARED BlockPut AS _BIT, Y AS INTEGER, PrevY AS INTEGER
 DIM SHARED CurrentShade AS INTEGER, NextShade AS INTEGER
-DIM SHARED AlignedWithRow AS _BYTE, InDanger AS _BYTE
-DIM SHARED GameOver AS _BYTE, GameEnded AS _BYTE
+DIM SHARED AlignedWithRow AS _BIT, InDanger AS _BIT
+DIM SHARED GameOver AS _BIT, GameEnded AS _BIT
 DIM SHARED PreviousScore AS LONG, Score AS LONG
+DIM SHARED GlobalShade AS INTEGER, DemoMode AS _BIT
+DIM SHARED AlertTimer AS INTEGER, TotalMerges AS LONG
+DIM SHARED TotalLines AS LONG, Setting AS INTEGER
 
 'Variables for screen pages:
 DIM SHARED InfoScreen AS LONG
 DIM SHARED OverlayGraphics AS LONG
 DIM SHARED GameScreen AS LONG
 DIM SHARED MainScreen AS LONG
+DIM SHARED UIWidth AS INTEGER
+DIM SHARED UIHeight AS INTEGER
 
 'Variable for sound:
-DIM SHARED DropSound(1 TO 3) AS LONG, SoundOn AS INTEGER, Alarm AS LONG
+DIM SHARED DropSound(1 TO 3) AS LONG, Alarm AS LONG
 DIM SHARED WindSound AS LONG, SplashSound(1 TO 4) AS LONG, Whistle AS LONG
 DIM SHARED BgMusic(1 TO 2) AS LONG
 
+'Other variables
+DIM SHARED InMenu AS _BIT, QuitGame AS _BIT
+DIM SHARED Settings AS SettingsFile
+DIM SettingChoice AS INTEGER
+
 'Screen initialization: ------------------------------------------------
+'Default window size is 600x800. If the desktop resolution is smaller
+'than 900px tall, resize the UI while keeping the aspect ratio.
+IF _HEIGHT(_SCREENIMAGE) < 900 THEN
+    UIHeight = _HEIGHT(_SCREENIMAGE) - 300
+    UIWidth = UIHeight * .75
+ELSE
+    UIWidth = 600
+    UIHeight = 800
+END IF
+
 InfoScreen = _NEWIMAGE(300, 400, 32)
-OverlayGraphics = _NEWIMAGE(600, 800, 32)
+OverlayGraphics = _NEWIMAGE(150, 200, 32)
 GameScreen = _NEWIMAGE(600, 800, 32)
-MainScreen = _NEWIMAGE(600, 800, 32)
+MainScreen = _NEWIMAGE(UIWidth, UIHeight, 32)
 
 BgImage = _LOADIMAGE("bg.png", 32)
+IF BgImage < -1 THEN _DONTBLEND BgImage
 
 SCREEN MainScreen
 
 IF BgImage < -1 THEN _PUTIMAGE , BgImage, MainScreen
 
 'RGB data for shades: --------------------------------------------------
-RESTORE Greens
-FOR i = 1 TO 5
-    READ Shades(i).R
-    READ Shades(i).G
-    READ Shades(i).B
-NEXT i
+SelectGlobalShade
 
 'Since now we already have read the shades' rgb data,
 'let's generate the window icon:
@@ -125,39 +185,138 @@ FOR i = 1 TO 12
     READ BlockRows(i)
 NEXT i
 
-'Load sounds and images: ----------------------------------------------
-LoadAssets
-
-RANDOMIZE TIMER
-
-SoundOn = True 'Eventually this will be read from a settings file
-BackgroundColor = _RGB32(200, 200, 200)
 InDanger = False
 GameOver = False
 GameEnded = False
+
+PrepareIntro
+
+'Load sounds and images: ----------------------------------------------
+LoadAssets
+
+'Read settings from file "shades.dat", if it exists: ------------------
+IF _FILEEXISTS("shades.dat") THEN
+    OPEN "shades.dat" FOR BINARY AS #1
+    GET #1, , Settings
+    CLOSE #1
+END IF
+
+IF Settings.ID <> FileID + CHR$(0) THEN
+    'Invalid settings file, use defaults
+    Settings.ID = FileID + CHR$(0)
+    Settings.SoundOn = True
+    Settings.MusicOn = True
+    Settings.Highscore = 0
+END IF
+
+Intro
+
 NextShade = INT(RND * 3) + 1 'Randomly chooses a shade for the next block
-PreviousScore = -1
+
+AlertTimer = _FREETIMER
+ON TIMER(AlertTimer, .005) ShowAlert
+TIMER(AlertTimer) OFF
 
 _DEST GameScreen
-IF BgImage < -1 THEN _PUTIMAGE , BgImage, GameScreen ELSE LINE (0, 0)-(599, 799), BackgroundColor, BF
+IF BgImage < -1 THEN _PUTIMAGE , BgImage, GameScreen ELSE CLS , BackgroundColor
 UpdateScreen
+
+RANDOMIZE TIMER
 
 'Main game loop: ------------------------------------------------------
 DO
-    GenerateNewBlock
-    MoveBlock
-    CheckDanger
-    CheckMerge
-    CheckConnectedLines
-LOOP UNTIL GameOver OR GameEnded
+    WHILE INKEY$ <> "": WEND 'Clears keyboard buffer to avoid unwanted ESCs
+    SelectGlobalShade
+    ERASE Board
+    REDIM Choices(1 TO 3) AS STRING
+    Choices(1) = "Play game"
+    Choices(2) = "Settings"
+    Choices(3) = "Quit"
+
+    Choice = Menu(1, 3, Choices())
+    SELECT CASE Choice
+        CASE PLAYGAME
+            Score = 0
+            PreviousScore = -1
+            TotalMerges = 0
+            TotalLines = 0
+            NextShade = INT(RND * 3) + 1
+            RedrawBoard
+            IF Settings.MusicOn THEN _SNDLOOP BgMusic(1)
+            DO
+                GenerateNewBlock
+                MoveBlock
+                CheckDanger
+                CheckMerge
+                CheckConnectedLines
+            LOOP UNTIL GameOver OR GameEnded
+            IF BgMusic(1) THEN _SNDSTOP BgMusic(1)
+            IF BgMusic(2) THEN _SNDSTOP BgMusic(2)
+            IF GameOver THEN
+                IF Settings.Highscore < Score THEN Settings.Highscore = Score
+                ShowEndScreen
+            END IF
+            GameOver = False
+            GameEnded = False
+        CASE SETTINGSMENU
+            REDIM Choices(1 TO 4) AS STRING
+            SettingChoice = 1
+            DO
+                IF Settings.SoundOn THEN Choices(1) = "Sound: ON" ELSE Choices(1) = "Sound: OFF"
+                IF Settings.MusicOn THEN Choices(2) = "Music: ON" ELSE Choices(2) = "Music: OFF"
+                Choices(3) = "Reset Highscores"
+                Choices(4) = "Return"
+
+                SettingChoice = Menu(SettingChoice, 4, Choices())
+                SELECT CASE SettingChoice
+                    CASE SWITCHSOUND
+                        Settings.SoundOn = NOT Settings.SoundOn
+                    CASE SWITCHMUSIC
+                        Settings.MusicOn = NOT Settings.MusicOn
+                    CASE RESETHIGHSCORES
+                        Settings.Highscore = 0
+                END SELECT
+            LOOP UNTIL SettingChoice = MAINMENU
+        CASE LEAVEGAME
+            QuitGame = True
+    END SELECT
+LOOP UNTIL QuitGame
+
+ON ERROR GOTO DontSave
+OPEN "shades.dat" FOR BINARY AS #1
+PUT #1, , Settings
+CLOSE #1
+
+DontSave:
 SYSTEM
 
 Greens:
-DATA 255,255,204
+DATA 245,245,204
 DATA 158,255,102
 DATA 107,204,51
 DATA 58,153,0
 DATA 47,127,0
+
+Oranges:
+DATA 255,193,153
+DATA 255,162,102
+DATA 255,115,26
+DATA 230,89,0
+DATA 128,49,0
+
+Blues:
+DATA 204,229,255
+DATA 128,190,255
+DATA 26,138,255
+DATA 0,87,179
+DATA 0,50,102
+
+Pinks:
+DATA 255,179,255
+DATA 255,128,255
+DATA 255,26,255
+DATA 179,0,178
+DATA 77,0,76
 
 BlockPositions:
 DATA 0,151,302,453
@@ -187,8 +346,10 @@ NextShade = INT(RND * 3) + 1
 'Block's Y coordinate starts offscreen
 Y = -48: PrevY = Y
 
+IF DemoMode THEN EXIT SUB
+
 'Animate the birth of a new block:
-IF Whistle AND SoundOn THEN
+IF Whistle AND Settings.SoundOn THEN
     _SNDPLAYCOPY Whistle
 END IF
 
@@ -201,9 +362,9 @@ LeftSideIncrement = (TargetLineStart - LineStart) / TopAnimationSteps
 RightSideIncrement = (LineEnd - TargetLineEnd) / TopAnimationSteps
 
 FOR i = 1 TO TopAnimationSteps
-    _LIMIT 60
+    _LIMIT 120
     IF BgImage < -1 THEN _PUTIMAGE (0, 0)-(599, 15), BgImage, GameScreen, (0, 0)-(599, 15) ELSE LINE (0, 0)-(599, 15), BackgroundColor, BF
-    LINE (LineStart, 0)-(LineEnd, 15), Shade~&(CurrentShade), BF
+    LINE (LineStart, 0)-(LineEnd, 15), Shade&(CurrentShade), BF
     LineStart = LineStart + LeftSideIncrement
     LineEnd = LineEnd - RightSideIncrement
     IF INKEY$ <> "" THEN EXIT FOR
@@ -213,9 +374,17 @@ IF BgImage < -1 THEN _PUTIMAGE (0, 0)-(599, 15), BgImage, GameScreen, (0, 0)-(59
 END SUB
 
 SUB MoveBlock
+'DIM MX AS INTEGER, MY AS INTEGER, MB AS INTEGER 'Mouse X, Y and Button
+'DIM PreviousMX 'Previously detected mouse position
+'DIM HighlightedCol AS INTEGER
+
+DIM k$
+
 FadeStep = 0
-Increment = DefaultIncrement
-BlockPut = False
+Increment = InitialIncrement
+IF NOT DemoMode THEN BlockPut = False
+'HighLightCol CurrentColumn
+'HighlightedCol = CurrentColumn
 DO
     'Before moving the block using Increment, check if the movement will
     'cause the block to move to another row. If so, check if such move will
@@ -228,6 +397,23 @@ DO
         AlignedWithRow = False
     END IF
 
+    'Mouse routines:
+    'WHILE _MOUSEINPUT: WEND
+    'MX = _MOUSEX: MY = _MOUSEY: MB = _MOUSEBUTTON(1)
+    'IF MX <> PreviousMX AND (MY > 0 AND MY < _HEIGHT(0)) THEN
+    '    IF ConvertXtoCol(MX) <> HighlightedCol AND ConvertXtoCol(MX) > 0 THEN
+    '        HighLightCol ConvertXtoCol(MX)
+    '        HighlightedCol = ConvertXtoCol(MX)
+    '        IF Board(CurrentRow, HighlightedCol).State = False THEN
+    '            IF BgImage < -1 THEN _PUTIMAGE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BgImage, GameScreen, (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight) ELSE LINE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BackgroundColor, BF
+    '            CurrentColumn = HighlightedCol
+    '        END IF
+    '    END IF
+    '    PreviousMX = MX
+    'END IF
+
+    'IF MB THEN Increment = BlockHeight
+
     CurrentRow = ConvertYtoRow(Y)
 
     IF AlignedWithRow THEN
@@ -239,8 +425,9 @@ DO
     END IF
 
     IF BlockPut THEN
+        Score = Score + 2
         DropSoundI = INT(RND * 3) + 1
-        IF DropSound(DropSoundI) AND SoundOn THEN
+        IF DropSound(DropSoundI) AND Settings.SoundOn AND NOT DemoMode THEN
             _SNDPLAYCOPY DropSound(DropSoundI)
         END IF
         Board(CurrentRow, CurrentColumn).State = True
@@ -260,21 +447,21 @@ DO
     END IF
     PrevY = Y
 
-    'Show the next shade on the top bar
-    IF FadeStep < 255 THEN
+    'Show the next shade on the top bar unless in DemoMode
+    IF FadeStep < 255 AND NOT DemoMode THEN
         FadeStep = FadeStep + 1
         LINE (0, 0)-(599, 15), _RGBA32(Shades(NextShade).R, Shades(NextShade).G, Shades(NextShade).B, FadeStep), BF
     END IF
 
     'Draw the current block
-    LINE (BlockPos(CurrentColumn), Y)-STEP(BlockWidth, BlockHeight), Shade(CurrentShade), BF
+    LINE (BlockPos(CurrentColumn), Y)-STEP(BlockWidth, BlockHeight), Shade&(CurrentShade), BF
 
     UpdateScreen
 
-    k$ = INKEY$
+    IF NOT DemoMode AND Increment < BlockHeight THEN k$ = INKEY$
 
     SELECT CASE k$
-        CASE CHR$(0) + CHR$(80), CHR$(32) 'Down arrow
+        CASE CHR$(0) + CHR$(80) 'Down arrow
             Increment = BlockHeight
         CASE CHR$(0) + CHR$(75) 'Left arrow
             IF CurrentColumn > 1 THEN
@@ -292,7 +479,10 @@ DO
             END IF
         CASE CHR$(27)
             GameEnded = True
+            'CASE " "
+            '    GameOver = True
     END SELECT
+    IF DemoMode THEN EXIT SUB
 LOOP UNTIL BlockPut OR GameEnded OR GameOver
 END SUB
 
@@ -306,6 +496,7 @@ IF BlockPut AND CurrentRow > 1 THEN
             Score = Score + CurrentShade * 2
             IF CurrentShade < 5 THEN
                 Merged = True
+                TotalMerges = TotalMerges + 1
                 i = CurrentShade
                 RStep = (Shades(i).R - Shades(i + 1).R) / MergeSteps
                 GStep = (Shades(i).G - Shades(i + 1).G) / MergeSteps
@@ -318,12 +509,11 @@ IF BlockPut AND CurrentRow > 1 THEN
 
                 ShrinkingHeight = BlockHeight * 2
 
-                IF SplashSound(CurrentShade) AND SoundOn THEN
+                IF SplashSound(CurrentShade) AND Settings.SoundOn AND NOT DemoMode THEN
                     _SNDPLAYCOPY SplashSound(CurrentShade)
                 END IF
 
                 FOR Merge = 0 TO MergeSteps
-                    _LIMIT MergeSteps
                     RToGo = RToGo - RStep
                     GToGo = GToGo - GStep
                     BToGo = BToGo - BStep
@@ -337,7 +527,7 @@ IF BlockPut AND CurrentRow > 1 THEN
                     END IF
 
                     'Draw the merging blocks:
-                    LINE (BlockPos(CurrentColumn), BlockRows(CurrentRow) + (BlockHeight * 2) - ShrinkingHeight + 1)-STEP(BlockWidth, ShrinkingHeight), _RGB32(RToGo, GToGo, BToGo), BF
+                    LINE (BlockPos(CurrentColumn), BlockRows(CurrentRow) + (BlockHeight * 2) - ShrinkingHeight - 1)-STEP(BlockWidth, ShrinkingHeight + 2), _RGB32(RToGo, GToGo, BToGo), BF
                     UpdateScreen
                 NEXT Merge
 
@@ -355,7 +545,6 @@ IF BlockPut AND CurrentRow > 1 THEN
         PrevY = Y
         CheckDanger
     LOOP UNTIL CurrentRow = 1 OR CurrentShade = 5
-    RedrawBoard
 END IF
 END SUB
 
@@ -372,7 +561,7 @@ DO
     Score = Score + 40
     MatchLineStart = BlockRows(CurrentMatch) + BlockHeight \ 2
 
-    IF WindSound AND SoundOn THEN
+    IF WindSound AND Settings.SoundOn AND NOT DemoMode THEN
         _SNDPLAYCOPY WindSound
     END IF
 
@@ -387,18 +576,20 @@ DO
     NEXT i
 
     DestroyLine CurrentMatch
+    TotalLines = TotalLines + 1
     RedrawBoard
 
     DropSoundI = INT(RND * 3) + 1
-    IF DropSound(DropSoundI) AND SoundOn THEN
+    IF DropSound(DropSoundI) AND Settings.SoundOn AND NOT DemoMode THEN
         _SNDPLAYCOPY DropSound(DropSoundI)
     END IF
+    IF DemoMode THEN DemoMode = False
 LOOP
 END SUB
 
 FUNCTION ConvertYtoRow (CurrentY)
 'Returns the row on the board through which the block is currently
-'passing. Returns 0 if it's exactly on the row's start line.
+'passing.
 
 IF CurrentY >= -48 AND CurrentY <= 20 THEN
     ConvertYtoRow = 12
@@ -427,8 +618,23 @@ ELSEIF CurrentY > 670 AND CurrentY <= 735 THEN
 END IF
 END FUNCTION
 
-FUNCTION Shade~& (CurrentShade)
-Shade~& = _RGB32(Shades(CurrentShade).R, Shades(CurrentShade).G, Shades(CurrentShade).B)
+FUNCTION ConvertXtoCol (CurrentX)
+'Returns the column on the board being currently hovered
+
+IF CurrentX >= BlockPos(1) AND CurrentX < BlockPos(2) THEN
+    ConvertXtoCol = 1
+ELSEIF CurrentX >= BlockPos(2) AND CurrentX < BlockPos(3) THEN
+    ConvertXtoCol = 2
+ELSEIF CurrentX >= BlockPos(3) AND CurrentX < BlockPos(4) THEN
+    ConvertXtoCol = 3
+ELSEIF CurrentX >= BlockPos(4) THEN
+    ConvertXtoCol = 4
+END IF
+END FUNCTION
+
+
+FUNCTION Shade& (CurrentShade)
+Shade& = _RGB32(Shades(CurrentShade).R, Shades(CurrentShade).G, Shades(CurrentShade).B)
 END FUNCTION
 
 FUNCTION CheckMatchingLine%
@@ -490,19 +696,18 @@ END SELECT
 END SUB
 
 SUB RedrawBoard
-
 DIM i AS INTEGER, CurrentColumn AS INTEGER
 DIM StartY AS INTEGER, EndY AS INTEGER
 
+IF BgImage < -1 THEN _PUTIMAGE , BgImage, GameScreen ELSE CLS , BackgroundColor
+
 FOR i = 1 TO 12
     FOR CurrentColumn = 4 TO 1 STEP -1
-        StartY = ((13 - i) * 65) - 45
+        StartY = BlockRows(i)
         EndY = StartY + BlockHeight
 
         IF Board(i, CurrentColumn).State = True THEN
-            LINE (BlockPos(CurrentColumn), StartY)-(BlockPos(CurrentColumn) + BlockWidth, EndY), Shade(Board(i, CurrentColumn).Shade), BF
-        ELSE
-            IF BgImage < -1 THEN _PUTIMAGE (BlockPos(CurrentColumn), StartY)-(BlockPos(CurrentColumn) + BlockWidth, EndY), BgImage, GameScreen, (BlockPos(CurrentColumn), StartY)-(BlockPos(CurrentColumn) + BlockWidth, EndY) ELSE LINE (BlockPos(CurrentColumn), StartY)-(BlockPos(CurrentColumn) + BlockWidth, EndY), BackgroundColor, BF
+            LINE (BlockPos(CurrentColumn), StartY)-(BlockPos(CurrentColumn) + BlockWidth, EndY), Shade&(Board(i, CurrentColumn).Shade), BF
         END IF
     NEXT CurrentColumn
 NEXT i
@@ -512,18 +717,24 @@ END SUB
 SUB ShowScore
 DIM ScoreString AS STRING
 
+IF Score = PreviousScore THEN EXIT SUB
+PreviousScore = Score
+
 ScoreString = "Score:" + STR$(Score)
 
 _DEST InfoScreen
-CLS
-LINE (0, 0)-STEP(_WIDTH, _HEIGHT), _RGBA32(0, 0, 0, 0), BF
+CLS , _RGBA32(0, 0, 0, 0)
 
 '_FONT 16
-PrintShadow 15, 15, ScoreString
+PrintShadow 15, 15, ScoreString, _RGB32(255, 255, 255)
 
-'_FONT 8
-'PrintShadow 15, 32, "Stats for nerds:"
-
+_FONT 8
+IF Score < Settings.Highscore THEN
+    PrintShadow 15, 32, "Highscore: " + TRIM$(Settings.Highscore), _RGB32(255, 255, 255)
+ELSEIF Score > Settings.Highscore THEN
+    PrintShadow 15, 32, "You beat the highscore!", _RGB32(255, 255, 255)
+END IF
+_FONT 16
 _DEST GameScreen
 
 END SUB
@@ -540,7 +751,7 @@ PreviousDest = _DEST
 _DEST Icon
 
 FOR i = 1 TO 5
-    LINE (0, i * (IconSize / 5) - (IconSize / 5))-(IconSize, i * (IconSize / 5)), Shade~&(i), BF
+    LINE (0, i * (IconSize / 5) - (IconSize / 5))-(IconSize, i * (IconSize / 5)), Shade&(i), BF
 NEXT i
 
 _ICON Icon
@@ -556,27 +767,29 @@ SUB CheckDanger
 'switching our soothing bg song to a fast paced circus
 'like melody.
 IF Board(11, 1).State OR Board(11, 2).State OR Board(11, 3).State OR Board(11, 4).State THEN
-    IF SoundOn AND NOT InDanger THEN
+    IF Settings.SoundOn AND NOT InDanger AND NOT DemoMode THEN
         IF Alarm THEN _SNDPLAYCOPY Alarm
-        IF BgMusic(1) THEN _SNDSTOP BgMusic(1)
-        IF BgMusic(2) THEN _SNDLOOP BgMusic(2)
+        IF Settings.MusicOn THEN
+            IF BgMusic(1) THEN _SNDSTOP BgMusic(1)
+            IF BgMusic(2) THEN _SNDLOOP BgMusic(2)
+        END IF
+        TIMER(AlertTimer) ON
     END IF
     InDanger = True
 ELSE
-    IF SoundOn AND InDanger THEN
+    IF Settings.MusicOn AND InDanger AND NOT DemoMode THEN
         IF BgMusic(2) THEN _SNDSTOP BgMusic(2)
         IF BgMusic(1) THEN _SNDLOOP BgMusic(1)
+        TIMER(AlertTimer) OFF
+        _DEST OverlayGraphics
+        CLS , _RGBA32(0, 0, 0, 0)
+        _DEST GameScreen
     END IF
     InDanger = False
 END IF
 END SUB
 
 SUB LoadAssets
-LoadingMessage$ = "Loading..."
-COLOR _RGB32(0, 0, 0), _RGBA32(0, 0, 0, 0)
-_PRINTSTRING (_WIDTH \ 2 - _PRINTWIDTH(LoadingMessage$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT \ 2), LoadingMessage$
-_SCREENMOVE _MIDDLE
-
 WindSound = _SNDOPEN("wind.ogg", "SYNC")
 Whistle = _SNDOPEN("whistle.ogg", "SYNC,VOL")
 Alarm = _SNDOPEN("alarm.ogg", "SYNC,VOL")
@@ -593,25 +806,238 @@ BgMusic(2) = _SNDOPEN("quick.ogg", "SYNC,VOL")
 _SNDVOL BgMusic(1), 0.3
 _SNDVOL BgMusic(2), 1
 _SNDVOL Whistle, 0.02
-_SNDLOOP BgMusic(1)
 END SUB
 
 SUB UpdateScreen
-'Display the gamescreen, overlay and scoreboard layers
-ShowScore
+'Display the gamescreen, overlay and score layers
+IF NOT DemoMode THEN ShowScore
 
 _PUTIMAGE , GameScreen, MainScreen
-_PUTIMAGE , OverlayGraphics, MainScreen
-_PUTIMAGE , InfoScreen, MainScreen
+IF InMenu OR InDanger THEN _PUTIMAGE , OverlayGraphics, MainScreen
+IF NOT InMenu THEN _PUTIMAGE , InfoScreen, MainScreen
 _DISPLAY
 END SUB
 
-SUB PrintShadow (x%, y%, Text$)
+SUB PrintShadow (x%, y%, Text$, ForeColor&)
 'Shadow:
 COLOR _RGBA32(150, 150, 150, 150), _RGBA32(0, 0, 0, 0)
 _PRINTSTRING (x% + 1, y% + 1), Text$
 
 'Text:
-COLOR _RGB32(255, 255, 255), _RGBA32(0, 0, 0, 0)
+COLOR ForeColor&, _RGBA32(0, 0, 0, 0)
 _PRINTSTRING (x%, y%), Text$
 END SUB
+
+SUB SelectGlobalShade
+GlobalShade = (GlobalShade) MOD MaxShades + 1
+SELECT CASE GlobalShade
+    CASE 1: RESTORE Greens
+    CASE 2: RESTORE Oranges
+    CASE 3: RESTORE Blues
+    CASE 4: RESTORE Pinks
+END SELECT
+
+FOR i = 1 TO 5
+    READ Shades(i).R
+    READ Shades(i).G
+    READ Shades(i).B
+NEXT i
+
+END SUB
+
+SUB PrepareIntro
+'The intro shows the board about to be cleared,
+'which then happens after assets are loaded. The intro
+'is generated using the game engine.
+
+'DemoMode prevents sounds to be played
+DemoMode = True
+
+_DEST InfoScreen
+_FONT 16
+LoadingMessage$ = "Cloned Shades"
+PrintShadow _WIDTH \ 2 - _PRINTWIDTH(LoadingMessage$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT, LoadingMessage$, _RGB32(255, 255, 255)
+
+_FONT 8
+LoadingMessage$ = "loading..."
+PrintShadow _WIDTH \ 2 - _PRINTWIDTH(LoadingMessage$) \ 2, _HEIGHT \ 2, LoadingMessage$, _RGB32(255, 255, 255)
+
+_FONT 16
+_DEST GameScreen
+
+'Setup the board to show an "about to merge" group of blocks
+'which will end up completing a dark line at the bottom.
+Board(1, 1).State = True
+Board(1, 1).Shade = 5
+Board(1, 2).State = True
+Board(1, 2).Shade = 5
+Board(1, 3).State = True
+Board(1, 3).Shade = 4
+Board(1, 4).State = True
+Board(1, 4).Shade = 5
+Board(2, 3).State = True
+Board(2, 3).Shade = 3
+Board(3, 3).State = True
+Board(3, 3).Shade = 2
+Board(4, 3).State = True
+Board(4, 3).Shade = 2
+
+CurrentColumn = 3
+CurrentRow = 4
+CurrentShade = 2
+Y = BlockRows(CurrentRow)
+PrevY = Y
+BlockPut = True
+
+RedrawBoard
+Board(4, 3).State = False
+
+_SCREENMOVE _MIDDLE
+
+UpdateScreen
+END SUB
+
+SUB Intro
+'The current board setup must have been prepared using PrepareIntro first.
+
+'Use the game engine to show the intro:
+CheckMerge
+CheckConnectedLines
+
+'Clear the "loading..." text
+_DEST InfoScreen
+CLS , _RGBA32(0, 0, 0, 0)
+_DEST GameScreen
+
+END SUB
+
+SUB HighLightCol (Col AS INTEGER)
+
+_DEST OverlayGraphics
+CLS , _RGBA32(0, 0, 0, 0)
+LINE (BlockPos(Col), 16)-STEP(BlockWidth, _HEIGHT(0)), _RGBA32(255, 255, 255, 150), BF
+_DEST GameScreen
+
+END SUB
+
+SUB ShowAlert
+STATIC FadeLevel
+DIM DangerMessage$
+
+IF InMenu THEN EXIT SUB
+
+IF FadeLevel > 100 THEN FadeLevel = 50
+FadeLevel = FadeLevel + 1
+_DEST OverlayGraphics
+CLS , _RGBA32(255, 0, 0, FadeLevel)
+DangerMessage$ = "DANGER!"
+PrintShadow _WIDTH \ 2 - _PRINTWIDTH(DangerMessage$) \ 2, _HEIGHT \ 2 - _FONTHEIGHT \ 2, DangerMessage$, _RGB32(255, 255, 255)
+_DEST GameScreen
+END SUB
+
+FUNCTION Menu (CurrentChoice AS INTEGER, MaxChoice AS INTEGER, Choices() AS STRING)
+'Returns PLAYGAME, SETTINGSMENU or LEAVEGAME
+'Uses OverlayGraphics page to display options.
+'Player must use arrow keys to make a choice then ENTER.
+
+DIM Choice AS INTEGER
+DIM ChoiceWasMade AS _BIT
+DIM k$, i AS INTEGER
+DIM ChooseColorTimer AS INTEGER
+
+DemoMode = True
+InMenu = True
+Choice = CurrentChoice
+
+ChooseColorTimer = _FREETIMER
+ON TIMER(ChooseColorTimer, 3.5) SelectGlobalShade
+TIMER(ChooseColorTimer) ON
+
+BlockPut = True
+DO
+    _LIMIT 30
+
+    'Use the game engine while the menu is displayed:
+    IF BlockPut THEN GenerateNewBlock: BlockPut = False
+    IF NOT BlockPut THEN MoveBlock
+    IF BlockPut THEN CheckMerge
+    IF BlockPut THEN CheckConnectedLines
+
+    GOSUB ShowCurrentChoice
+    k$ = INKEY$
+    SELECT CASE k$
+        CASE CHR$(0) + CHR$(80) 'Down arrow
+            Choice = (Choice) MOD MaxChoice + 1
+        CASE CHR$(0) + CHR$(72) 'Up arrow
+            Choice = (Choice + MaxChoice - 2) MOD MaxChoice + 1
+        CASE CHR$(13) 'Enter
+            ChoiceWasMade = True
+        CASE CHR$(27) 'ESC
+            ChoiceWasMade = True
+            Choice = MaxChoice
+    END SELECT
+LOOP UNTIL ChoiceWasMade
+
+TIMER(ChooseColorTimer) FREE
+InMenu = False
+DemoMode = False
+_DEST OverlayGraphics
+CLS , _RGBA32(255, 255, 255, 100)
+_DEST GameScreen
+
+Menu = Choice
+EXIT FUNCTION
+
+ShowCurrentChoice:
+_DEST OverlayGraphics
+CLS , _RGBA32(255, 255, 255, 100)
+
+FOR i = 1 TO MaxChoice
+    IF i = Choice THEN
+        PrintShadow (_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH(Choices(i)) \ 2), (_HEIGHT(OverlayGraphics) \ 2) - (_FONTHEIGHT \ 2) - ((MaxChoice - i) * _FONTHEIGHT - _FONTHEIGHT), Choices(i), Shade&(5)
+    ELSE
+        COLOR Shade&(3)
+        _PRINTSTRING ((_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH(Choices(i)) \ 2), (_HEIGHT(OverlayGraphics) \ 2) - (_FONTHEIGHT \ 2) - ((MaxChoice - i) * _FONTHEIGHT - _FONTHEIGHT)), Choices(i)
+    END IF
+NEXT i
+_DEST GameScreen
+UpdateScreen
+RETURN
+
+END FUNCTION
+
+SUB ShowEndScreen
+DIM Message$(1 TO 10), k$, i AS INTEGER
+DIM ThisLine AS INTEGER
+
+_DEST OverlayGraphics
+CLS , _RGBA32(255, 255, 255, 150)
+
+Message$(1) = "GAME OVER"
+Message$(3) = "Your score:"
+Message$(4) = TRIM$(Score)
+Message$(5) = "Merged blocks:"
+Message$(6) = TRIM$(TotalMerges)
+Message$(7) = "Lines destroyed:"
+Message$(8) = TRIM$(TotalLines)
+Message$(10) = "Press any key..."
+
+ThisLine = 5
+FOR i = 1 TO UBOUND(message$)
+    IF i > 1 THEN _FONT 8: ThisLine = 4
+    IF i = UBOUND(message$) THEN _FONT 16: ThisLine = 5
+    PrintShadow (_WIDTH(OverlayGraphics) \ 2) - (_PRINTWIDTH(Message$(i)) \ 2), i * 16, Message$(i), Shade&(ThisLine)
+NEXT i
+
+_DEST GameScreen
+InMenu = True
+UpdateScreen
+
+WHILE INKEY$ <> "": WEND
+k$ = "": WHILE k$ = "": _LIMIT 30: k$ = INKEY$: WEND
+
+END SUB
+
+FUNCTION TRIM$ (Number)
+TRIM$ = LTRIM$(RTRIM$(STR$(Number)))
+END FUNCTION
