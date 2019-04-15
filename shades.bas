@@ -1,14 +1,9 @@
-_TITLE "Cloned Shades"
-SCREEN _NEWIMAGE(600, 800, 32)
-_SCREENMOVE _MIDDLE
-_PRINTMODE _KEEPBACKGROUND
-
 CONST True = -1
 CONST False = 0
 CONST BlockWidth = 150
 CONST BlockHeight = 64
 CONST TopAnimationSteps = 60
-CONST AnimationDelay = .005
+CONST AnimationDelay = .003
 
 TYPE ColorRGB
     R AS INTEGER
@@ -24,13 +19,24 @@ END TYPE
 DIM SHARED Shades(1 TO 5) AS ColorRGB, FadeStep AS INTEGER
 DIM SHARED BlockPos(1 TO 4) AS INTEGER, BackgroundColor AS _UNSIGNED LONG
 DIM SHARED BlockRows(1 TO 12) AS INTEGER
-DIM i AS INTEGER, LevelDelay AS SINGLE, Increment AS INTEGER
+DIM LevelDelay AS SINGLE, Increment AS INTEGER
 DIM SHARED DropSound(1 TO 3) AS LONG, SoundOn AS INTEGER, Alarm AS LONG
 DIM SHARED WindSound AS LONG, SplashSound(1 TO 4) AS LONG, Whistle AS LONG
-DIM BgMusic(1 TO 2) AS LONG
+DIM BgMusic AS LONG
 DIM CurrentRow AS INTEGER
-DIM SHARED Board(1 TO 12, 1 TO 4) AS BoardType
+DIM SHARED Board(1 TO 12, 1 TO 4) AS BoardType, Score AS LONG
 DIM BlockPut AS INTEGER
+DIM SHARED Arial16 AS LONG, Arial32 AS LONG, BoardBG AS LONG
+DIM SHARED LastScoreShown AS LONG, MainGame AS LONG, DrawnBoard AS LONG, ScoreBoard AS LONG
+
+_TITLE "Cloned Shades"
+
+MainGame = _NEWIMAGE(600, 800, 32)
+DrawnBoard = _NEWIMAGE(600, 800, 32)
+
+SCREEN MainGame
+_PRINTMODE _KEEPBACKGROUND
+_SCREENMOVE _MIDDLE
 
 RESTORE Greens
 FOR i = 1 TO 5
@@ -50,16 +56,18 @@ FOR i = 1 TO 12
 NEXT i
 
 Increment = 1
+LastScoreShown = -1
 SoundOn = True
-LevelDelay = .005
+LevelDelay = 60
 BackupLevelDelay = LevelDelay
 BackgroundColor = _RGB32(200, 200, 200)
 GameOver = False
 GameEnded = False
 
 WindSound = _SNDOPEN("wind.wav", "SYNC")
+Arial16 = _LOADFONT("C:\windows\fonts\arial.ttf", 16)
 
-'Show loading screen (while bg music is loading... currently takes too long):
+'Show loading screen (while bg music is loading... currently takes a bit too long):
 CurrentMatch = 6
 MatchLineStart = ((13 - CurrentMatch) * 65) - 45
 MatchLineEnd = MatchLineStart + BlockHeight
@@ -68,74 +76,160 @@ IF WindSound AND SoundOn THEN
     _SNDPLAYCOPY WindSound
 END IF
 
+IF Arial16 THEN
+    _FONT Arial16, 0
+END IF
+
 FOR FadeStep = 1 TO BlockHeight
     _LIMIT 60
     LINE (0, MatchLineStart + FadeStep)-(599, MatchLineEnd - FadeStep), _RGB32(255, 255, 255), B
 NEXT FadeStep
 COLOR _RGB32(0, 0, 0)
-_PRINTSTRING (250, MatchLineStart + BlockHeight / 2 - 8), "Loading..."
+Txt$ = "Loading..."
+CenterY = 300 - _PRINTWIDTH(Txt$) \ 2
+_PRINTSTRING (CenterY, MatchLineStart + BlockHeight / 2 - 8), Txt$
 
 LINE (5, MatchLineEnd - 7)-(594, MatchLineEnd - 2), _RGB32(0, 0, 0), B
 
-TotalItems = 11
-ItemsLoaded = 1
-LINE (6, MatchLineEnd - 6)-(593 * (ItemsLoaded / TotalItems), MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+TotalItems = 12
+PreviousPercentage = 0.1
+ItemsLoaded = 2
+
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
+
+BoardBG = _LOADIMAGE("bg.png")
+ItemsLoaded = ItemsLoaded + 1
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
+
+Arial32 = _LOADFONT("C:\windows\fonts\arial.ttf", 32)
+ItemsLoaded = ItemsLoaded + 1
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
 
 Whistle = _SNDOPEN("whistle.wav", "SYNC,VOL")
 ItemsLoaded = ItemsLoaded + 1
-LINE (6, MatchLineEnd - 6)-(593 * (ItemsLoaded / TotalItems), MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
 
 Alarm = _SNDOPEN("alarm.wav", "SYNC,VOL")
 ItemsLoaded = ItemsLoaded + 1
-LINE (6, MatchLineEnd - 6)-(593 * (ItemsLoaded / TotalItems), MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
 
 DropSound(1) = _SNDOPEN("drop1.wav", "SYNC")
 ItemsLoaded = ItemsLoaded + 1
-LINE (6, MatchLineEnd - 6)-(593 * (ItemsLoaded / TotalItems), MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
 
 DropSound(2) = _SNDOPEN("drop2.wav", "SYNC")
 ItemsLoaded = ItemsLoaded + 1
-LINE (6, MatchLineEnd - 6)-(593 * (ItemsLoaded / TotalItems), MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
 
 DropSound(3) = _SNDOPEN("drop3.wav", "SYNC")
 ItemsLoaded = ItemsLoaded + 1
-LINE (6, MatchLineEnd - 6)-(593 * (ItemsLoaded / TotalItems), MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
 
-BgMusic(1) = _SNDOPEN("calm.mp3", "VOL,PAUSE,SETPOS")
+BgMusic = _SNDOPEN("calm.ogg", "VOL,PAUSE")
 ItemsLoaded = ItemsLoaded + 1
-LINE (6, MatchLineEnd - 6)-(593 * (ItemsLoaded / TotalItems), MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
 
 SplashSound(1) = _SNDOPEN("water1.wav", "SYNC")
 ItemsLoaded = ItemsLoaded + 1
-LINE (6, MatchLineEnd - 6)-(593 * (ItemsLoaded / TotalItems), MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
 
 SplashSound(2) = _SNDOPEN("water2.wav", "SYNC")
 ItemsLoaded = ItemsLoaded + 1
-LINE (6, MatchLineEnd - 6)-(593 * (ItemsLoaded / TotalItems), MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
 
 SplashSound(3) = _SNDOPEN("water3.wav", "SYNC")
 ItemsLoaded = ItemsLoaded + 1
-LINE (6, MatchLineEnd - 6)-(593 * (ItemsLoaded / TotalItems), MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
 
 SplashSound(4) = _SNDOPEN("water4.wav", "SYNC")
 ItemsLoaded = ItemsLoaded + 1
-LINE (6, MatchLineEnd - 6)-(593 * (ItemsLoaded / TotalItems), MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+Percentage = ItemsLoaded / TotalItems
+FOR i = PreviousPercentage TO Percentage STEP .1
+    _LIMIT 30
+    LINE (6, MatchLineEnd - 6)-(589 * i, MatchLineEnd - 3), _RGB32(0, 255, 0), BF
+NEXT i
+PreviousPercentage = Percentage
 
-'BgMusic(2) = _SNDOPEN("danger.mp3", "VOL,PAUSE,SETPOS")
-'ItemsLoaded = ItemsLoaded + 1
-'LINE (6, MatchLineEnd - 6)-(593 * (ItemsLoaded / TotalItems), MatchLineEnd - 3), _RGB32(0, 255, 0), BF
-
-_SNDVOL BgMusic(1), 0.1
-_SNDVOL BgMusic(2), 0.1
-_SNDLOOP BgMusic(1)
+_SNDVOL BgMusic, 0.1
+_SNDLOOP BgMusic
 
 _SNDVOL Whistle, 0.01
 
 RANDOMIZE TIMER
 
-LINE (0, 0)-(599, 799), BackgroundColor, BF
+_DONTBLEND
+_DEST DrawnBoard
+
+IF BoardBG THEN
+    _PUTIMAGE (0, 0), BoardBG
+ELSE
+    LINE (0, 0)-(599, 799), BackgroundColor, BF
+END IF
+
+ShowScore
 
 NextShade = INT(RND * 3) + 1
+
 DO
     CurrentColumn = INT(RND * 4) + 1
     CurrentShade = NextShade
@@ -157,22 +251,31 @@ DO
     RightSideIncrement = (LineEnd - TargetLineEnd) / TopAnimationSteps
 
     FOR i = 1 TO TopAnimationSteps
-        _LIMIT 60
-        LINE (0, 0)-(599, 15), BackgroundColor, BF
+        IF LevelDelay THEN _LIMIT LevelDelay
+
+        IF BoardBG THEN
+            _PUTIMAGE (0, 0), BoardBG, , (0, 0)-(599, 15)
+        ELSE
+            LINE (0, 0)-(599, 15), BackgroundColor, BF
+        END IF
         LINE (LineStart, 0)-(LineEnd, 15), Shade(CurrentShade), BF
         LineStart = LineStart + LeftSideIncrement
         LineEnd = LineEnd - RightSideIncrement
         IF INKEY$ <> "" THEN EXIT FOR
     NEXT i
-    LINE (0, 0)-(599, 15), BackgroundColor, BF
+
+    IF BoardBG THEN
+        _PUTIMAGE (0, 0), BoardBG, , (0, 0)-(599, 15)
+    ELSE
+        LINE (0, 0)-(599, 15), BackgroundColor, BF
+    END IF
 
     FadeStep = 0
     LevelDelay = BackupLevelDelay
     BlockPut = False
     DO
+        IF LevelDelay THEN _LIMIT LevelDelay
         Y = Y + Increment
-        LOCATE 10, 1
-
         IF Y > -48 AND Y < 21 THEN
             CurrentRow = 12
         ELSEIF Y > 20 AND Y < 85 THEN
@@ -199,7 +302,21 @@ DO
             CurrentRow = 1
         END IF
 
-        IF (POINT(BlockPos(CurrentColumn), Y + BlockHeight + 1) <> BackgroundColor) OR (Y + BlockHeight_1 = 800) THEN
+        Dropped = False
+        SELECT CASE Y
+            CASE 20, 85, 150, 215, 280, 345, 410, 475, 540, 605, 670
+                'Hit a block
+                IF Board(CurrentRow - 1, CurrentColumn).State = True THEN Dropped = True
+            CASE 735
+                'Hit the ground
+                Dropped = True
+        END SELECT
+
+        IF NOT Dropped THEN
+            IF Y + BlockHeight = 800 THEN Dropped = True
+        END IF
+
+        IF Dropped THEN
             DropSoundI = INT(RND * 3) + 1
             IF DropSound(DropSoundI) AND SoundOn THEN
                 _SNDPLAYCOPY DropSound(DropSoundI)
@@ -213,7 +330,13 @@ DO
             GameOver = True
             _SNDSTOP BgMusic
         END IF
-        LINE (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY), BackgroundColor, BF
+
+        IF BoardBG THEN
+            _PUTIMAGE (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY), BoardBG, , (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY)
+        ELSE
+            LINE (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY), BackgroundColor, BF
+        END IF
+
         PrevY = Y
 
         IF FadeStep < 256 THEN
@@ -222,9 +345,10 @@ DO
         END IF
 
         'Draw the current block
+        'ShowScore
         LINE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), Shade(CurrentShade), BF
 
-        _DELAY LevelDelay
+        _PUTIMAGE , DrawnBoard, MainBoard
 
         k$ = INKEY$
 
@@ -234,14 +358,22 @@ DO
             CASE CHR$(0) + CHR$(75) 'Left arrow
                 IF CurrentColumn > 1 THEN
                     IF Board(CurrentRow, CurrentColumn - 1).State = False THEN
-                        LINE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BackgroundColor, BF
+                        IF BoardBG THEN
+                            _PUTIMAGE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BoardBG, , (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight)
+                        ELSE
+                            LINE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BackgroundColor, BF
+                        END IF
                         CurrentColumn = CurrentColumn - 1
                     END IF
                 END IF
             CASE CHR$(0) + CHR$(77) 'Right arrow
                 IF CurrentColumn < 4 THEN
                     IF Board(CurrentRow, CurrentColumn + 1).State = False THEN
-                        LINE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BackgroundColor, BF
+                        IF BoardBG THEN
+                            _PUTIMAGE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BoardBG, , (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight)
+                        ELSE
+                            LINE (BlockPos(CurrentColumn), Y)-(BlockPos(CurrentColumn) + BlockWidth, Y + BlockHeight), BackgroundColor, BF
+                        END IF
                         CurrentColumn = CurrentColumn + 1
                     END IF
                 END IF
@@ -250,14 +382,19 @@ DO
         END SELECT
     LOOP UNTIL BlockPut OR GameEnded OR GameOver
 
+    IF GameEnded THEN SYSTEM
+
+    IF BlockPut THEN AddScore 2
+
     'Check if a block merge will be required:
     Merged = False
     IF BlockPut AND CurrentRow > 1 THEN
         DO
             IF Board(CurrentRow, CurrentColumn).Shade = Board(CurrentRow - 1, CurrentColumn).Shade THEN
                 'Change block's color and the one touched to a darker shade, if any
-                IF CurrentShade < 5 THEN
+                IF NOT GameOver AND CurrentShade < 5 THEN
                     Merged = True
+                    AddScore 4
                     i = CurrentShade
                     RStep = (Shades(i).R - Shades(i + 1).R) / 255
                     GStep = (Shades(i).G - Shades(i + 1).G) / 255
@@ -275,14 +412,18 @@ DO
                     END IF
 
                     FOR Merge = 0 TO 255
-                        _LIMIT 120
+                        _LIMIT 220
                         RToGo = RToGo - RStep
                         GToGo = GToGo - GStep
                         BToGo = BToGo - BStep
                         Y = Y + YStep
                         ShrinkingHeight = ShrinkingHeight - YStep
 
-                        LINE (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY), BackgroundColor, BF
+                        IF BoardBG THEN
+                            _PUTIMAGE (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY), BoardBG, , (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY)
+                        ELSE
+                            LINE (BlockPos(CurrentColumn), PrevY)-(BlockPos(CurrentColumn) + BlockWidth, PrevY), BackgroundColor, BF
+                        END IF
                         PrevY = Y
 
                         LOCATE 5, 1
@@ -314,6 +455,7 @@ DO
         IF CurrentMatch = 0 THEN EXIT DO
 
         Matched = True
+        AddScore 200
         MatchLineStart = ((13 - CurrentMatch) * 65) - 45
         MatchLineEnd = MatchLineStart + BlockHeight
 
@@ -343,10 +485,8 @@ DO
             END IF
         END IF
     END IF
-
-    'ShowBoardInfo
-
 LOOP UNTIL GameOver OR GameEnded
+SYSTEM
 
 Yellow:
 DATA 15,68,91,43,6
@@ -439,7 +579,11 @@ FOR i = 1 TO 12
         IF Board(i, CurrentColumn).State = True THEN
             LINE (BlockPos(CurrentColumn), StartY)-(BlockPos(CurrentColumn) + BlockWidth, EndY), Shade(Board(i, CurrentColumn).Shade), BF
         ELSE
-            LINE (BlockPos(CurrentColumn), StartY)-(BlockPos(CurrentColumn) + BlockWidth, EndY), BackgroundColor, BF
+            IF BoardBG THEN
+                _PUTIMAGE (BlockPos(CurrentColumn), StartY)-(BlockPos(CurrentColumn) + BlockWidth, EndY), BoardBG, , (BlockPos(CurrentColumn), StartY)-(BlockPos(CurrentColumn) + BlockWidth, EndY)
+            ELSE
+                LINE (BlockPos(CurrentColumn), StartY)-(BlockPos(CurrentColumn) + BlockWidth, EndY), BackgroundColor, BF
+            END IF
         END IF
     NEXT CurrentColumn
 NEXT i
@@ -468,3 +612,38 @@ NEXT i
 
 END SUB
 
+
+SUB AddScore (Points)
+Score = Score + Points
+ShowScore
+END SUB
+
+SUB ShowScore
+
+COLOR _RGB32(100, 100, 100)
+ScoreTxt$ = LTRIM$(STR$(Score))
+TxtWidth = _PRINTWIDTH(ScoreTxt$) * 3
+IF Arial32 THEN TxtHeight = _FONTHEIGHT(Arial32)
+CenterY = 300 - TxtWidth \ 2
+ScoreHeight = 40
+
+'IF BoardBG THEN
+'    _PUTIMAGE (5, ScoreHeight)-(CenterY + TxtWidth, ScoreHeight + TxtHeight), BoardBG, , (5, ScoreHeight)-(CenterY + TxtWidth, ScoreHeight + TxtHeight)
+'ELSE
+'    LINE (5, ScoreHeight)-(CenterY + TxtWidth, ScoreHeight + TxtHeight), BackgroundColor, BF
+'END IF
+
+ScoreBoard = _COPYIMAGE(DrawnBoard)
+_DEST ScoreBoard
+
+IF Arial32 THEN
+    _FONT Arial32
+END IF
+_PRINTSTRING (CenterY, ScoreHeight), ScoreTxt$
+_PRINTSTRING (5, ScoreHeight), "Level 1"
+
+_DEST MainGame
+_PUTIMAGE , ScoreBoard
+_FREEIMAGE ScoreBoard
+_DEST DrawnBoard
+END SUB
